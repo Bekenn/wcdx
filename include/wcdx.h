@@ -3,11 +3,7 @@
 #pragma once
 
 #include <comdef.h>
-#include <windef.h>
-
-_COM_SMARTPTR_TYPEDEF(IDirect3D9, __uuidof(IDirect3D9));
-_COM_SMARTPTR_TYPEDEF(IDirect3DDevice9, __uuidof(IDirect3DDevice9));
-_COM_SMARTPTR_TYPEDEF(IDirect3DSurface9, __uuidof(IDirect3DSurface9));
+#include <d3d9.h>
 
 
 #ifdef WCDX_EXPORTS
@@ -15,10 +11,6 @@ _COM_SMARTPTR_TYPEDEF(IDirect3DSurface9, __uuidof(IDirect3DSurface9));
 #else
 #define WCDXAPI __declspec(dllimport)
 #endif
-
-
-typedef interface IDirect3D9                    IDirect3D9;
-typedef interface IDirect3DDevice9              IDirect3DDevice9;
 
 
 class WCDXAPI Wcdx

@@ -1,0 +1,12 @@
+#include "resources.h"
+
+IDPNG_SCREEN0 PNG "images/wc_000.png"
+IDPNG_SCREEN1 PNG "images/wc_001.png"
+IDPNG_SCREEN2 PNG "images/wc_002.png"
+IDPNG_SCREEN3 PNG "images/wc_003.png"
+IDPNG_SCREEN4 PNG "images/wc_004.png"
+IDPNG_SCREEN5 PNG "images/wc_005.png"
+IDPNG_SCREEN6 PNG "images/wc_006.png"
+IDPNG_SCREEN7 PNG "images/wc_007.png"
+IDPNG_SCREEN8 PNG "images/wc_008.png"
+IDPNG_SCREEN9 PNG "images/wc_009.png"

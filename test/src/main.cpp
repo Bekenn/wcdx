@@ -1,4 +1,6 @@
 #include "common.h"
+#include "../res/resources.h"
+
 #include <wcdx.h>
 
 
@@ -42,8 +44,9 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
-	case WM_CLOSE:
+	case WM_NCDESTROY:
 		::PostQuitMessage(EXIT_SUCCESS);
+		break;
 	}
 
 	return ::DefWindowProc(hWnd, uMsg, wParam, lParam);

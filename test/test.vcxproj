@@ -85,7 +85,23 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="res\resources.h" />
     <ClInclude Include="src\common.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\resources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\images\wc_000.png" />
+    <Image Include="res\images\wc_001.png" />
+    <Image Include="res\images\wc_002.png" />
+    <Image Include="res\images\wc_003.png" />
+    <Image Include="res\images\wc_004.png" />
+    <Image Include="res\images\wc_005.png" />
+    <Image Include="res\images\wc_006.png" />
+    <Image Include="res\images\wc_007.png" />
+    <Image Include="res\images\wc_008.png" />
+    <Image Include="res\images\wc_009.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

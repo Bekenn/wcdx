@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Resource Files\images">
+      <UniqueIdentifier>{c7c56da1-471d-462d-b98e-29b026da8eda}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
@@ -26,5 +29,45 @@
     <ClInclude Include="src\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="res\resources.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\resources.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\images\wc_000.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_001.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_002.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_003.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_004.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_005.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_006.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_007.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_008.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
+    <Image Include="res\images\wc_009.png">
+      <Filter>Resource Files\images</Filter>
+    </Image>
   </ItemGroup>
 </Project>

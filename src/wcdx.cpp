@@ -13,13 +13,18 @@ Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirtyPalette(
 	{
 		1024, 768, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
-		D3DSWAPEFFECT_COPY, nullptr, FALSE,
+		D3DSWAPEFFECT_COPY, nullptr, TRUE,
 		FALSE, D3DFMT_UNKNOWN,
 		D3DPRESENTFLAG_LOCKABLE_BACKBUFFER, 0, D3DPRESENT_INTERVAL_DEFAULT
 	};
-	d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device);
-//	device->CreateRenderTarget(320, 200, D3DFMT_P8, D3DMULTISAMPLE_NONE, 0, TRUE, &buffer, nullptr);
-	device->CreateOffscreenPlainSurface(320, 200, D3DFMT_P8, D3DPOOL_DEFAULT, &buffer, nullptr);
+
+	HRESULT hr;
+	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
+		_com_raise_error(hr);
+
+	//	device->CreateRenderTarget(320, 200, D3DFMT_P8, D3DMULTISAMPLE_NONE, 0, TRUE, &buffer, nullptr);
+	if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_P8, D3DPOOL_DEFAULT, &buffer, nullptr)))
+		_com_raise_error(hr);
 }
 
 void Wcdx::SetPalette(const PALETTEENTRY entries[256])

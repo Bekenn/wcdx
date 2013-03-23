@@ -31,10 +31,11 @@ private:
 #pragma warning(disable:4251)
 	IDirect3D9Ptr d3d;
 	IDirect3DDevice9Ptr device;
-	IDirect3DSurface9Ptr buffer;
+	IDirect3DSurface9Ptr surface;
 #pragma warning(pop)
 
-	PALETTEENTRY palette[256];
+	RGBQUAD palette[256];
+	BYTE framebuffer[320 * 200];
 
 	bool dirtyPalette;
 	bool dirtyFrame;

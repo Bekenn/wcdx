@@ -10,6 +10,8 @@
 #include <memory>
 #include <vector>
 
+#include <assert.h>
+
 using std::min;
 using std::max;
 #include <gdiplus.h>

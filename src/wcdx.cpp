@@ -7,13 +7,13 @@
 
 using namespace std;
 
-Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirtyPalette(false), dirtyFrame(false)
+Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 {
 	D3DPRESENT_PARAMETERS params =
 	{
 		1024, 768, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
-		D3DSWAPEFFECT_COPY, nullptr, TRUE,
+		D3DSWAPEFFECT_DISCARD, nullptr, TRUE,
 		FALSE, D3DFMT_UNKNOWN,
 		D3DPRESENTFLAG_LOCKABLE_BACKBUFFER, 0, D3DPRESENT_INTERVAL_DEFAULT
 	};
@@ -35,7 +35,7 @@ void Wcdx::SetPalette(const PALETTEENTRY entries[256])
 		RGBQUAD color = { pe.peRed, pe.peGreen, pe.peBlue, 0xFF };
 		return color;
 	});
-	dirtyPalette = true;
+	dirty = true;
 }
 
 void Wcdx::UpdatePalette(UINT index, const PALETTEENTRY& entry)
@@ -44,7 +44,7 @@ void Wcdx::UpdatePalette(UINT index, const PALETTEENTRY& entry)
 	palette[index].rgbGreen = entry.peGreen;
 	palette[index].rgbBlue = entry.peBlue;
 	palette[index].rgbReserved = 0xFF;
-	dirtyPalette = true;
+	dirty = true;
 }
 
 void Wcdx::UpdateFrame(const void* bits, const RECT& rect, UINT pitch)
@@ -66,12 +66,12 @@ void Wcdx::UpdateFrame(const void* bits, const RECT& rect, UINT pitch)
 		src += pitch;
 		dest += 320;
 	}
-	dirtyFrame = true;
+	dirty = true;
 }
 
 void Wcdx::Present()
 {
-	if (!dirtyPalette && !dirtyFrame)
+	if (!dirty)
 		return;
 
 	HRESULT hr;
@@ -81,36 +81,30 @@ void Wcdx::Present()
 	{
 		at_scope_exit([&]{ device->EndScene(); });
 
-		if (dirtyPalette)
-			dirtyPalette = false;
-
-		if (dirtyFrame)
+		D3DLOCKED_RECT locked;
+		RECT bounds = { 0, 0, 320, 200 };
+		if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
+			_com_raise_error(hr);
+		const BYTE* src = framebuffer;
+		RGBQUAD* dest = static_cast<RGBQUAD*>(locked.pBits);
+		for (int row = 0; row < 200; ++row)
 		{
-			D3DLOCKED_RECT locked;
-			RECT bounds = { 0, 0, 320, 200 };
-			if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
-				_com_raise_error(hr);
-			const BYTE* src = framebuffer;
-			RGBQUAD* dest = static_cast<RGBQUAD*>(locked.pBits);
-			for (int row = 0; row < 200; ++row)
+			transform(src, src + 320, dest, [&](BYTE index)
 			{
-				transform(src, src + 320, dest, [&](BYTE index)
-				{
-					return palette[index];
-				});
+				return palette[index];
+			});
 
-				src += 320;
-				dest += locked.Pitch / sizeof(*dest);
-			}
-			hr = surface->UnlockRect();
-
-			IDirect3DSurface9Ptr backBuffer;
-			if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-				_com_raise_error(hr);
-			if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_NONE)))
-				_com_raise_error(hr);
-			dirtyFrame = false;
+			src += 320;
+			dest += locked.Pitch / sizeof(*dest);
 		}
+		hr = surface->UnlockRect();
+
+		IDirect3DSurface9Ptr backBuffer;
+		if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+			_com_raise_error(hr);
+		if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_NONE)))
+			_com_raise_error(hr);
+		dirty = false;
 	}
 
 	if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))

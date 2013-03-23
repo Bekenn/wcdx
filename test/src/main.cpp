@@ -7,6 +7,7 @@
 #include <Shlwapi.h>
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 using std::min;
@@ -22,9 +23,20 @@ enum
 	WM_APP_RENDER = WM_APP
 };
 
+struct WindowData
+{
+	Wcdx& wcdx;
+	vector<unique_ptr<Bitmap>> images;
+	size_t imageIndex;
+};
+
+static unique_ptr<Bitmap> LoadPng(LPCWSTR resource);
+static void ShowImage(HWND window, Bitmap& image);
+
 static bool OnCreate(HWND window, const CREATESTRUCT& create);
 static void OnDestroy(HWND window);
 static void OnShowWindow(HWND window, bool show, DWORD reason);
+static void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags);
 static void OnRender(HWND window);
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -32,6 +44,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 {
 	try
 	{
+		ULONG_PTR gdiplusToken;
+		GdiplusStartupInput gdiStartupInput(nullptr, TRUE, TRUE);
+		GdiplusStartupOutput gdiStartupOutput;
+		::GdiplusStartup(&gdiplusToken, &gdiStartupInput, &gdiStartupOutput);
+		at_scope_exit([&]{ ::GdiplusShutdown(gdiplusToken); });
+		ULONG_PTR gdiplusHookToken;
+		gdiStartupOutput.NotificationHook(&gdiplusHookToken);
+		at_scope_exit([&]{ gdiStartupOutput.NotificationUnhook(gdiplusHookToken); });
+
 		WNDCLASSEX wc =
 		{
 			sizeof(WNDCLASSEX),
@@ -54,40 +75,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 			CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
 			nullptr, nullptr, hInstance, nullptr);
 		Wcdx wcdx(window);
-		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&wcdx));
+		WindowData windowData = { wcdx };
+		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&windowData));
 
-		HRSRC resourceHandle = ::FindResource(nullptr, MAKEINTRESOURCE(IDPNG_SCREEN0), L"PNG");
-		HGLOBAL resourceGlobal = ::LoadResource(nullptr, resourceHandle);
-		LPVOID resourceData = ::LockResource(resourceGlobal);
-		DWORD resourceSize = ::SizeofResource(nullptr, resourceHandle);
+		for (int n = 0; n < 10; ++n)
+			windowData.images.push_back(LoadPng(MAKEINTRESOURCE(IDPNG_SCREEN0 + n)));
 
-		ULONG_PTR gdiplusToken;
-		GdiplusStartupInput gdiStartupInput(nullptr, TRUE, TRUE);
-		GdiplusStartupOutput gdiStartupOutput;
-		::GdiplusStartup(&gdiplusToken, &gdiStartupInput, &gdiStartupOutput);
-
-		IStream* stream = ::SHCreateMemStream(static_cast<const BYTE*>(resourceData), resourceSize);
-		Bitmap image(stream);
-		Status status = image.GetLastStatus();
-
-#if 0
-		HBITMAP bitmap;
-		image.GetHBITMAP(Color(), &bitmap);
-#else
-		vector<BYTE> paletteData(image.GetPaletteSize());
-		ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
-		image.GetPalette(&palette, paletteData.size());
-
-		assert(palette.Count == 256);
-		wcdx.SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
-
-		Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
-		BitmapData bits;
-		status = image.LockBits(&imageRect, 0, image.GetPixelFormat(), &bits);
-
-		RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
-		wcdx.UpdateFrame(bits.Scan0, updateRect, bits.Stride);
-#endif
+		ShowImage(window, *windowData.images[windowData.imageIndex]);
 
 		::ShowWindow(window, nCmdShow);
 
@@ -99,7 +93,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 				return EXIT_FAILURE;
 			::DispatchMessage(&message);
 		}
-
 		return message.wParam;
 	}
 	catch (const _com_error& error)
@@ -109,6 +102,43 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 	}
 
 	return EXIT_FAILURE;
+}
+
+unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
+{
+	HRSRC resourceHandle = ::FindResource(nullptr, resource, L"PNG");
+	HGLOBAL resourceGlobal = ::LoadResource(nullptr, resourceHandle);
+	LPVOID resourceData = ::LockResource(resourceGlobal);
+	DWORD resourceSize = ::SizeofResource(nullptr, resourceHandle);
+
+	IStream* stream = ::SHCreateMemStream(static_cast<const BYTE*>(resourceData), resourceSize);
+	if (stream != nullptr)
+	{
+		at_scope_exit([&]{ stream->Release(); });
+		return unique_ptr<Bitmap>(new Bitmap(stream));
+	}
+
+	return nullptr;
+}
+
+void ShowImage(HWND window, Bitmap& image)
+{
+	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+
+	vector<BYTE> paletteData(image.GetPaletteSize());
+	ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
+	image.GetPalette(&palette, paletteData.size());
+
+	assert(palette.Count == 256);
+	windowData.wcdx.SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
+
+	Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
+	BitmapData bits;
+	image.LockBits(&imageRect, 0, image.GetPixelFormat(), &bits);
+	at_scope_exit([&]{ image.UnlockBits(&bits); });
+
+	RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
+	windowData.wcdx.UpdateFrame(bits.Scan0, updateRect, bits.Stride);
 }
 
 bool OnCreate(HWND window, const CREATESTRUCT& create)
@@ -130,13 +160,23 @@ void OnShowWindow(HWND window, bool show, DWORD reason)
 		::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
+void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags)
+{
+	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	if (++windowData.imageIndex == windowData.images.size())
+		windowData.imageIndex = 0;
+
+	ShowImage(window, *windowData.images[windowData.imageIndex]);
+	::PostMessage(window, WM_APP_RENDER, 0, 0);
+}
+
 void OnRender(HWND window)
 {
 	if (!::IsWindowVisible(window))
 		return;
 
-	Wcdx& wcdx = *reinterpret_cast<Wcdx*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	wcdx.Present();
+	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	windowData.wcdx.Present();
 
 //	::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
@@ -162,8 +202,13 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		OnShowWindow(hWnd, wParam != FALSE, lParam);
 		break;
 
+	case WM_LBUTTONUP:
+		OnLButtonUp(hWnd, LOWORD(lParam), HIWORD(lParam), wParam);
+		break;
+
 	case WM_APP_RENDER:
 		OnRender(hWnd);
+		break;
 	}
 
 	return ::DefWindowProc(hWnd, uMsg, wParam, lParam);

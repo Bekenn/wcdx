@@ -36,9 +36,7 @@ private:
 
 	RGBQUAD palette[256];
 	BYTE framebuffer[320 * 200];
-
-	bool dirtyPalette;
-	bool dirtyFrame;
+	bool dirty;
 };
 
 #endif

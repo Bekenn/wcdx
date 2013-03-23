@@ -25,6 +25,14 @@ Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirtyPalette(
 	//	device->CreateRenderTarget(320, 200, D3DFMT_P8, D3DMULTISAMPLE_NONE, 0, TRUE, &buffer, nullptr);
 	if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_P8, D3DPOOL_DEFAULT, &buffer, nullptr)))
 		_com_raise_error(hr);
+
+	PALETTEENTRY initialPalette[256];
+	PALETTEENTRY defColor = { 0, 0, 0, 0xFF };
+	fill(begin(initialPalette), end(initialPalette), defColor);
+	if (FAILED(hr = device->SetPaletteEntries(0, initialPalette)))
+		_com_raise_error(hr);
+	if (FAILED(hr = device->SetCurrentTexturePalette(1)))
+		_com_raise_error(hr);
 }
 
 void Wcdx::SetPalette(const PALETTEENTRY entries[256])
@@ -44,8 +52,10 @@ void Wcdx::UpdatePalette(UINT index, const PALETTEENTRY& entry)
 
 void Wcdx::UpdateFrame(const void* bits, const RECT& rect, UINT pitch)
 {
+	HRESULT hr;
 	D3DLOCKED_RECT lockedRect;
-	buffer->LockRect(&lockedRect, &rect, D3DLOCK_DISCARD);
+	if (FAILED(hr = buffer->LockRect(&lockedRect, &rect, D3DLOCK_DISCARD)))
+		_com_raise_error(hr);
 	const BYTE* src = static_cast<const BYTE*>(bits);
 	BYTE* dest = static_cast<BYTE*>(lockedRect.pBits);
 	LONG width = rect.right - rect.left;
@@ -67,23 +77,31 @@ void Wcdx::Present()
 	if (!dirtyPalette && !dirtyFrame)
 		return;
 
-	device->BeginScene();
+	HRESULT hr;
+	if (FAILED(hr = device->BeginScene()))
+		_com_raise_error(hr);
 
-	if (dirtyPalette)
 	{
-		device->SetPaletteEntries(0, palette);
-		dirtyPalette = false;
+		at_scope_exit([&]{ device->EndScene(); });
+
+		if (dirtyPalette)
+		{
+			if (FAILED(hr = device->SetPaletteEntries(0, palette)))
+				_com_raise_error(hr);
+			dirtyPalette = false;
+		}
+
+		if (dirtyFrame)
+		{
+			IDirect3DSurface9Ptr backBuffer;
+			if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+				_com_raise_error(hr);
+			if (FAILED(hr = device->StretchRect(buffer, nullptr, backBuffer, nullptr, D3DTEXF_LINEAR)))
+				_com_raise_error(hr);
+			dirtyFrame = false;
+		}
 	}
 
-	if (dirtyFrame)
-	{
-		IDirect3DSurface9Ptr backBuffer;
-		device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
-		device->StretchRect(buffer, nullptr, backBuffer, nullptr, D3DTEXF_NONE);
-		dirtyFrame = false;
-	}
-
-	device->EndScene();
-
-	device->Present(nullptr, nullptr, nullptr, nullptr);
+	if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))
+		_com_raise_error(hr);
 }

@@ -4,7 +4,18 @@
 #include <wcdx.h>
 
 #include <DxErr.h>
+#include <Shlwapi.h>
 
+#include <algorithm>
+#include <vector>
+
+using std::min;
+using std::max;
+#include <gdiplus.h>
+
+
+using namespace Gdiplus;
+using namespace std;
 
 enum
 {
@@ -44,6 +55,39 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 			nullptr, nullptr, hInstance, nullptr);
 		Wcdx wcdx(window);
 		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&wcdx));
+
+		HRSRC resourceHandle = ::FindResource(nullptr, MAKEINTRESOURCE(IDPNG_SCREEN0), L"PNG");
+		HGLOBAL resourceGlobal = ::LoadResource(nullptr, resourceHandle);
+		LPVOID resourceData = ::LockResource(resourceGlobal);
+		DWORD resourceSize = ::SizeofResource(nullptr, resourceHandle);
+
+		ULONG_PTR gdiplusToken;
+		GdiplusStartupInput gdiStartupInput(nullptr, TRUE, TRUE);
+		GdiplusStartupOutput gdiStartupOutput;
+		::GdiplusStartup(&gdiplusToken, &gdiStartupInput, &gdiStartupOutput);
+
+		IStream* stream = ::SHCreateMemStream(static_cast<const BYTE*>(resourceData), resourceSize);
+		Bitmap image(stream);
+		Status status = image.GetLastStatus();
+
+#if 0
+		HBITMAP bitmap;
+		image.GetHBITMAP(Color(), &bitmap);
+#else
+		vector<BYTE> paletteData(image.GetPaletteSize());
+		ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
+		image.GetPalette(&palette, paletteData.size());
+
+		assert(palette.Count == 256);
+		wcdx.SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
+
+		Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
+		BitmapData bits;
+		status = image.LockBits(&imageRect, 0, image.GetPixelFormat(), &bits);
+
+		RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
+		wcdx.UpdateFrame(bits.Scan0, updateRect, bits.Stride);
+#endif
 
 		::ShowWindow(window, nCmdShow);
 

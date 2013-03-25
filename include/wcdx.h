@@ -17,6 +17,9 @@ class WCDXAPI Wcdx
 {
 public:
 	Wcdx(HWND window);
+private:
+	Wcdx(const Wcdx&);
+	Wcdx& operator = (const Wcdx&);
 
 public:
 	void SetPalette(const PALETTEENTRY entries[256]);

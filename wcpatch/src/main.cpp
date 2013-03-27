@@ -1,5 +1,9 @@
 #include "common.h"
 
+#include <iolib/file_stream.h>
+#include <iolib/stream.h>
+#include <windows_error.h>
+
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -12,6 +16,8 @@
 
 
 using namespace std;
+using namespace iolib;
+using namespace windows;
 
 struct section_header_t
 {
@@ -54,111 +60,132 @@ int wmain(int argc, wchar_t* argv[])
 		return EXIT_FAILURE;
 	}
 
-	FILE* input_file = _wfopen(argv[1], L"rb");
-	if (input_file == nullptr)
+	try
 	{
-		wcerr << L"Error: Unable to open input path: " << argv[1] << endl;
-		return EXIT_FAILURE;
-	}
-
-	vector<uint8_t> file_data;
-	{
-		at_scope_exit([&]{ fclose(input_file); });
-		fseek(input_file, 0, SEEK_END);
-		long size = ftell(input_file);
-		if (size == -1)
+		// Read the input file into an in-memory buffer.
+		vector<uint8_t> file_buffer;
 		{
-			wcerr << L"Error: Unable to determine input file size." << endl;
+			file input_file(argv[1], file::mode::open | file::mode::read);
+			input_file.seek(0, file::seek_from::end);
+			size_t size = size_t(input_file.position());
+			file_buffer.resize(size);
+			input_file.seek(0, file::seek_from::beginning);
+			input_file.read(file_buffer.data(), file_buffer.size());
+		}
+
+		// iolib streams are very good for reading heterogeneous data.
+		memory_stream file_data(file_buffer.data(), file_buffer.size());
+
+		// Read offset of PE header
+		file_data.seek(0x3C);
+		uint32_t offset;
+		file_data.read(offset);
+
+		// Read PE signature
+		file_data.seek(offset, stream::seek_from::beginning);
+		char signature[4];
+		file_data.read(signature, sizeof(signature));
+		if (!equal(begin(signature), end(signature), begin(PESignature)))
+		{
+			wcerr << L"Error: Input file is not a valid executable." << endl;
 			return EXIT_FAILURE;
 		}
 
-		file_data.resize(size);
-		rewind(input_file);
-		fread(file_data.data(), size, 1, input_file);
-	}
+		// Read number of sections
+		file_data.seek(2);
+		uint16_t section_count;
+		file_data.read(section_count);
 
-	auto file_p = file_data.data();
+		// Skip to optional header
+		file_data.seek(12);
+		uint16_t header_size;
+		file_data.read(header_size);
 
-	// Read offset of PE header
-	file_p += 0x3C;
-	uint32_t offset = *reinterpret_cast<uint32_t*>(file_p);
-
-	// Read PE signature
-	file_p = file_data.data() + offset;
-	if (memcmp(file_p, PESignature, lengthof(PESignature)) != 0)
-	{
-		wcerr << L"Error: Input file is not a valid executable." << endl;
-		return EXIT_FAILURE;
-	}
-
-	// Read number of sections
-	file_p += sizeof(PESignature) + 2;
-	uint16_t section_count = *reinterpret_cast<uint16_t*>(file_p);
-
-	// Skip to optional header
-	file_p += 14;
-	uint16_t header_size = *reinterpret_cast<uint16_t*>(file_p);
-	file_p += 4;
-	uint16_t pe_type_signature = *reinterpret_cast<uint16_t*>(file_p);
-	if (pe_type_signature != OptionalHeader_PE32Signature && pe_type_signature != OptionalHeader_PE32PlusSignature)
-	{
-		wcerr << L"Error: Input file is not a valid executable." << endl;
-		return EXIT_FAILURE;
-	}
-
-	// Skip to the section tables.
-	file_p += header_size;
-
-	for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index, file_p += sizeof(section_header_t))
-	{
-		section_header_t& section_header = *reinterpret_cast<section_header_t*>(file_p);
-		if (strcmp(section_header.name, ".idata") != 0)
-			continue;
-
-		// Skip to the import tables.
-		file_p = file_data.data() + section_header.raw_data_offset;
-
-		// The import tables specify RVAs for import entries, so we'll need the base
-		// address of the section in order to locate the imports in the input file.
-		uint32_t idata_base_rva = section_header.virtual_address;
-		auto idata_base_p = file_p;
-
-		// Skip past the directory tables.
-		while (true)
+		file_data.seek(2);
+		uint16_t pe_type_signature;
+		file_data.read(pe_type_signature);
+		if (pe_type_signature != OptionalHeader_PE32Signature && pe_type_signature != OptionalHeader_PE32PlusSignature)
 		{
-			import_entry_t& import_entry = *reinterpret_cast<import_entry_t*>(file_p);
-			if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
-				break;
+			wcerr << L"Error: Input file is not a valid executable." << endl;
+			return EXIT_FAILURE;
+		}
 
-			auto import_entry_p = file_p + sizeof(import_entry_t);
-			file_p = idata_base_p + import_entry.dllname_virtual_address - idata_base_rva;
-			if (_stricmp(reinterpret_cast<char*>(file_p), "ddraw.dll") == 0)
+		// Skip to the section tables.
+		file_data.seek(header_size - 2);
+
+		for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index)
+		{
+			section_header_t section_header;
+			file_data.read(section_header);
+			if (strcmp(section_header.name, ".idata") != 0)
+				continue;
+
+			// Save current position.
+			auto position = file_data.position();
+
+			// Skip to the import tables.
+			file_data.seek(section_header.raw_data_offset, file::seek_from::beginning);
+
+			// The import tables specify RVAs for import entries, so we'll need the base
+			// address of the section in order to locate the imports in the input file.
+			uint32_t idata_base_rva = section_header.virtual_address;
+
+			// Skip past the directory tables.
+			while (true)
 			{
-				file_p = idata_base_p + import_entry.lookup_virtual_address - idata_base_rva;
-				if (pe_type_signature == OptionalHeader_PE32Signature)
+				import_entry_t import_entry;
+				file_data.read(import_entry);
+				if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
+					break;
+
+				auto import_entry_position = file_data.position();
+				file_data.seek(section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva, file::seek_from::beginning);
+				string dll_name;
+				char ch;
+				while ((file_data.read(ch), ch) != '\0')
+					dll_name += ch;
+				if (_stricmp(dll_name.c_str(), "ddraw.dll") == 0)
 				{
-					uint32_t lookup;
-					while ((lookup = *reinterpret_cast<uint32_t*>(file_p)) != 0)
+					file_data.seek(section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva, file::seek_from::beginning);
+					if (pe_type_signature == OptionalHeader_PE32Signature)
 					{
-						if ((lookup & 0x80000000) == 0)
+						uint32_t lookup;
+						while ((file_data.read(lookup), lookup) != 0)
 						{
-							auto name_p = idata_base_p + lookup - idata_base_rva + 2;
-							string name = reinterpret_cast<char*>(name_p);
+							if ((lookup & 0x80000000) == 0)
+							{
+								file_data.seek(section_header.raw_data_offset + lookup - idata_base_rva + 2, file::seek_from::beginning);
+								string name;
+								while ((file_data.read(ch), ch) != '\0')
+									name += ch;
+							}
 						}
-						file_p += sizeof(uint32_t);
+					}
+					else
+					{
+						uint64_t lookup;
+						while ((file_data.read(lookup), lookup) != 0)
+						{
+							if ((lookup & 0x8000000000000000) == 0)
+							{
+								file_data.seek(section_header.raw_data_offset + uint32_t(lookup) - idata_base_rva + 2, file::seek_from::beginning);
+								string name;
+								while ((file_data.read(ch), ch) != '\0')
+									name += ch;
+							}
+						}
 					}
 				}
-				else
-				{
-					uint64_t lookup;
-					while ((lookup = *reinterpret_cast<uint64_t*>(file_p)) != 0)
-						file_p += sizeof(uint64_t);
-				}
-			}
 
-			file_p = import_entry_p;
+				file_data.set_position(import_entry_position);
+			}
 		}
+
+		return EXIT_SUCCESS;
+	}
+	catch (...)
+	{
 	}
 
-	return EXIT_SUCCESS;
+	return EXIT_FAILURE;
 }

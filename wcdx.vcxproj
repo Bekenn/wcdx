@@ -60,6 +60,14 @@
       <AdditionalDependencies>d3d9.lib;DxErr.lib;RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\$(TargetedSDKArchitecture);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <PostBuildEvent>
+      <Command>lib $(TargetDir)$(TargetName).lib $(IntDir)iwcdx_i.obj</Command>
+      <Message>Adding interface GUID to import library...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -80,6 +88,14 @@
       <AdditionalDependencies>d3d9.lib;DxErr.lib;RpcRT4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\$(TargetedSDKArchitecture);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <CustomBuildStep />
+    <PostBuildEvent>
+      <Command>lib $(TargetDir)$(TargetName).lib $(IntDir)iwcdx_i.obj</Command>
+      <Message>Adding interface GUID to import library...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\iwcdx.h" />

@@ -155,7 +155,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 		IDirect3DSurface9Ptr backBuffer;
 		if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
 			return hr;
-		if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_NONE)))
+		if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_POINT)))
 			return hr;
 		dirty = false;
 	}

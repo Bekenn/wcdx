@@ -1,11 +1,23 @@
 #include "common.h"
-#include <wcdx.h>
+#include "wcdx.h"
 
 #include <algorithm>
 #include <limits>
 
 
 using namespace std;
+
+IWcdx* CreateWcdx(HWND window)
+{
+	try
+	{
+		return new Wcdx(window);
+	}
+	catch (const _com_error&)
+	{
+		return nullptr;
+	}
+}
 
 Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 {
@@ -28,7 +40,22 @@ Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 	fill(begin(palette), end(palette), defColor);
 }
 
-void Wcdx::SetPalette(const PALETTEENTRY entries[256])
+HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
+{
+	return E_NOINTERFACE;
+}
+
+ULONG STDMETHODCALLTYPE Wcdx::AddRef()
+{
+	return 0;
+}
+
+ULONG STDMETHODCALLTYPE Wcdx::Release()
+{
+	return 0;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const PALETTEENTRY entries[256])
 {
 	transform(entries, entries + 256, palette, [](PALETTEENTRY pe)
 	{
@@ -36,19 +63,22 @@ void Wcdx::SetPalette(const PALETTEENTRY entries[256])
 		return color;
 	});
 	dirty = true;
+	return S_OK;
 }
 
-void Wcdx::UpdatePalette(UINT index, const PALETTEENTRY& entry)
+HRESULT STDMETHODCALLTYPE Wcdx::UpdatePalette(UINT index, const PALETTEENTRY* entry)
 {
-	palette[index].rgbRed = entry.peRed;
-	palette[index].rgbGreen = entry.peGreen;
-	palette[index].rgbBlue = entry.peBlue;
+	palette[index].rgbRed = entry->peRed;
+	palette[index].rgbGreen = entry->peGreen;
+	palette[index].rgbBlue = entry->peBlue;
 	palette[index].rgbReserved = 0xFF;
 	dirty = true;
+	return S_OK;
 }
 
-void Wcdx::UpdateFrame(const void* bits, const RECT& rect, UINT pitch)
+HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits)
 {
+	RECT rect = { x, y, x + width, y + height };
 	RECT clipped =
 	{
 		max(rect.left, LONG(0)),
@@ -59,24 +89,25 @@ void Wcdx::UpdateFrame(const void* bits, const RECT& rect, UINT pitch)
 
 	const BYTE* src = static_cast<const BYTE*>(bits);
 	BYTE* dest = framebuffer + clipped.left + (320 * clipped.top);
-	LONG width = clipped.right - clipped.left;
-	for (LONG height = clipped.bottom - clipped.top; height-- > 0; )
+	width = clipped.right - clipped.left;
+	for (height = clipped.bottom - clipped.top; height-- > 0; )
 	{
 		copy(src, src + width, dest);
 		src += pitch;
 		dest += 320;
 	}
 	dirty = true;
+	return S_OK;
 }
 
-void Wcdx::Present()
+HRESULT STDMETHODCALLTYPE Wcdx::Present()
 {
 	if (!dirty)
-		return;
+		return S_OK;
 
 	HRESULT hr;
 	if (FAILED(hr = device->BeginScene()))
-		_com_raise_error(hr);
+		return hr;
 
 	{
 		at_scope_exit([&]{ device->EndScene(); });
@@ -84,7 +115,7 @@ void Wcdx::Present()
 		D3DLOCKED_RECT locked;
 		RECT bounds = { 0, 0, 320, 200 };
 		if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
-			_com_raise_error(hr);
+			return hr;
 		const BYTE* src = framebuffer;
 		RGBQUAD* dest = static_cast<RGBQUAD*>(locked.pBits);
 		for (int row = 0; row < 200; ++row)
@@ -101,12 +132,14 @@ void Wcdx::Present()
 
 		IDirect3DSurface9Ptr backBuffer;
 		if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-			_com_raise_error(hr);
+			return hr;
 		if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_NONE)))
-			_com_raise_error(hr);
+			return hr;
 		dirty = false;
 	}
 
 	if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))
-		_com_raise_error(hr);
+		return hr;
+
+	return S_OK;
 }

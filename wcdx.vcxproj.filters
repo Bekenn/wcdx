@@ -18,7 +18,10 @@
     <ClInclude Include="src\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\wcdx.h">
+    <ClInclude Include="include\iwcdx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\wcdx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -29,5 +32,19 @@
     <ClCompile Include="src\wcdx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\dlldata.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\iwcdx_i.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\iwcdx_p.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="include\iwcdx.idl">
+      <Filter>Source Files</Filter>
+    </Midl>
   </ItemGroup>
 </Project>

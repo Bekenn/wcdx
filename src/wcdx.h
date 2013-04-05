@@ -2,6 +2,8 @@
 #define WCDX_INCLUDED
 #pragma once
 
+#include <iwcdx.h>
+
 #include <comdef.h>
 #include <d3d9.h>
 
@@ -13,7 +15,7 @@
 #endif
 
 
-class WCDXAPI Wcdx
+class WCDXAPI Wcdx : public IWcdx
 {
 public:
 	Wcdx(HWND window);
@@ -22,10 +24,16 @@ private:
 	Wcdx& operator = (const Wcdx&);
 
 public:
-	void SetPalette(const PALETTEENTRY entries[256]);
-	void UpdatePalette(UINT index, const PALETTEENTRY& entry);
-	void UpdateFrame(const void* bits, const RECT& rect, UINT pitch);
-	void Present();
+	// IUnknown
+	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) override;
+	ULONG STDMETHODCALLTYPE AddRef() override;
+	ULONG STDMETHODCALLTYPE Release() override;
+
+	// IWcdx
+	HRESULT STDMETHODCALLTYPE SetPalette(const PALETTEENTRY entries[256]) override;
+	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const PALETTEENTRY* entry) override;
+    HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
+    HRESULT STDMETHODCALLTYPE Present() override;
 
 private:
 	// Suppress warnings about IDirect3D9Ptr not being exported -- they're not

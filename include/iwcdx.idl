@@ -1,0 +1,18 @@
+import "unknwn.idl";
+import "wtypes.idl";
+
+interface IWcdx;
+IWcdx* CreateWcdx(HWND window);
+
+[
+	local,
+	object,
+	uuid(ab008bae-e9b4-411f-87d7-a7622a26c98b)
+]
+interface IWcdx : IUnknown
+{
+	HRESULT SetPalette([in] const PALETTEENTRY entries[256]);
+	HRESULT UpdatePalette(UINT index, [in, ref] const PALETTEENTRY* entry);
+	HRESULT UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, [in, size_is(height * pitch)] const byte* bits);
+	HRESULT Present();
+}

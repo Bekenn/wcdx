@@ -1,7 +1,7 @@
 #include "common.h"
 #include "../res/resources.h"
 
-#include <wcdx.h>
+#include <iwcdx.h>
 
 #include <DxErr.h>
 #include <Shlwapi.h>

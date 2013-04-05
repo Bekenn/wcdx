@@ -8,14 +8,7 @@
 #include <d3d9.h>
 
 
-#ifdef WCDX_EXPORTS
-#define WCDXAPI __declspec(dllexport)
-#else
-#define WCDXAPI __declspec(dllimport)
-#endif
-
-
-class WCDXAPI Wcdx : public IWcdx
+class Wcdx : public IWcdx
 {
 public:
 	Wcdx(HWND window);
@@ -36,6 +29,8 @@ public:
     HRESULT STDMETHODCALLTYPE Present() override;
 
 private:
+	ULONG ref_count;
+
 	// Suppress warnings about IDirect3D9Ptr not being exported -- they're not
 	// directly usable by clients, so it doesn't matter.
 #pragma warning(push)

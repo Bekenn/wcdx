@@ -3,8 +3,10 @@
 
 #include <iwcdx.h>
 
+#include <d3d9.h>
 #include <DxErr.h>
 #include <Shlwapi.h>
+#include <comdef.h>
 
 #include <algorithm>
 #include <memory>
@@ -27,7 +29,7 @@ enum
 
 struct WindowData
 {
-	Wcdx& wcdx;
+	IWcdx* wcdx;
 	vector<unique_ptr<Bitmap>> images;
 	size_t imageIndex;
 };
@@ -76,7 +78,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 			L"Wcdx Test", WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX),
 			CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
 			nullptr, nullptr, hInstance, nullptr);
-		Wcdx wcdx(window);
+		IWcdx* wcdx = CreateWcdx(window);
 		WindowData windowData = { wcdx };
 		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&windowData));
 
@@ -132,7 +134,7 @@ void ShowImage(HWND window, Bitmap& image)
 	image.GetPalette(&palette, paletteData.size());
 
 	assert(palette.Count == 256);
-	windowData.wcdx.SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
+	windowData.wcdx->SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
 
 	Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
 	BitmapData bits;
@@ -140,7 +142,7 @@ void ShowImage(HWND window, Bitmap& image)
 	at_scope_exit([&]{ image.UnlockBits(&bits); });
 
 	RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
-	windowData.wcdx.UpdateFrame(bits.Scan0, updateRect, bits.Stride);
+	windowData.wcdx->UpdateFrame(updateRect.left, updateRect.top, updateRect.right - updateRect.left, updateRect.bottom - updateRect.top, bits.Stride, reinterpret_cast<byte*>(bits.Scan0));
 }
 
 bool OnCreate(HWND window, const CREATESTRUCT& create)
@@ -152,6 +154,8 @@ bool OnCreate(HWND window, const CREATESTRUCT& create)
 
 void OnDestroy(HWND window)
 {
+	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	windowData.wcdx->Release();
 	::CoUninitialize();
 	::PostQuitMessage(EXIT_SUCCESS);
 }
@@ -178,7 +182,7 @@ void OnRender(HWND window)
 		return;
 
 	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	windowData.wcdx.Present();
+	windowData.wcdx->Present();
 
 //	::PostMessage(window, WM_APP_RENDER, 0, 0);
 }

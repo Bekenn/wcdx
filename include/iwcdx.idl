@@ -1,7 +1,15 @@
 import "unknwn.idl";
 import "wtypes.idl";
 
+cpp_quote("#ifdef WCDX_EXPORTS")
+cpp_quote("#define WCDXAPI __declspec(dllexport)")
+cpp_quote("#else")
+cpp_quote("#define WCDXAPI __declspec(dllimport)")
+cpp_quote("#endif")
+
 interface IWcdx;
+
+cpp_quote("WCDXAPI")
 IWcdx* CreateWcdx(HWND window);
 
 [

@@ -7,7 +7,7 @@
 
 using namespace std;
 
-IWcdx* CreateWcdx(HWND window)
+WCDXAPI IWcdx* CreateWcdx(HWND window)
 {
 	try
 	{
@@ -19,7 +19,7 @@ IWcdx* CreateWcdx(HWND window)
 	}
 }
 
-Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
+Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 {
 	D3DPRESENT_PARAMETERS params =
 	{
@@ -42,17 +42,39 @@ Wcdx::Wcdx(HWND window) : d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 
 HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 {
+	if (ppvObject == nullptr)
+		return E_POINTER;
+
+	if (IsEqualIID(riid, IID_IUnknown))
+	{
+		*reinterpret_cast<IUnknown**>(ppvObject) = this;
+		++ref_count;
+		return S_OK;
+	}
+	if (IsEqualIID(riid, IID_IWcdx))
+	{
+		*reinterpret_cast<IWcdx**>(ppvObject) = this;
+		++ref_count;
+		return S_OK;
+	}
+
 	return E_NOINTERFACE;
 }
 
 ULONG STDMETHODCALLTYPE Wcdx::AddRef()
 {
-	return 0;
+	return ++ref_count;
 }
 
 ULONG STDMETHODCALLTYPE Wcdx::Release()
 {
-	return 0;
+	if (--ref_count == 0)
+	{
+		delete this;
+		return 0;
+	}
+
+	return ref_count;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const PALETTEENTRY entries[256])

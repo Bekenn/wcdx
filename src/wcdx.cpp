@@ -7,7 +7,7 @@
 
 using namespace std;
 
-WCDXAPI IWcdx* CreateWcdx(HWND window)
+WCDXAPI IWcdx* WcdxCreate(HWND window)
 {
 	try
 	{

@@ -78,7 +78,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 			L"Wcdx Test", WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX),
 			CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
 			nullptr, nullptr, hInstance, nullptr);
-		IWcdx* wcdx = CreateWcdx(window);
+		IWcdx* wcdx = WcdxCreate(window);
 		WindowData windowData = { wcdx };
 		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&windowData));
 

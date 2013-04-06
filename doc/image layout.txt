@@ -1,0 +1,51 @@
+Offset	Size (hex)	Size (dec)	Description
+0		80			128			MS-DOS Stub
+80		18			24			PE Header
+86		2			2			Number of sections
+98		e0			208			Optional Header
+b4		44			68			Windows-specific fields
+b4		4			4			Image Base
+c0		2			2			Minimum OS Version (major)
+c2		2			2			Minimum OS Version (minor)
+d8		4			4			Checksum (not used, thankfully)
+f4		4			4			Number of data-directory entries
+f8		80			128			Data-Directory Entries
+100		8			8			Import table entry
+100		4			4			Import table RVA
+104		4			4			Import table size
+120		8			8			Base relocation table entry
+158		8			8			Import address table entry
+178		c8			200			Section table
+178		28			40			.text section header
+1a0		28			40			.rdata section header
+1c8		28			40			.data section header
+1f0		28			40			.idata section header
+1f0		8			8				name
+1f8		4			4				virtual size (size in memory)
+1fc		4			4				virtual address
+200		4			4				raw data size (size in image)
+204		4			4				raw data offset
+218		28			40			.reloc section header
+400		9f000		651264		.text section
+9f400	2600		9728		.rdata section
+a1a00	14800		83968		.data section
+b6200	1600		5632		.idata section (RVA 22b000)
+b6200	a0			160				Import Directory Table
+b6200	14			20				ddraw import entry
+b6200	4			4					lookup table rva (22b0dc)
+b620c	4			4					name rva (22b8bc)
+b6210	4			4					address table rva (22b4e0)
+b6214	14			20				winmm import entry
+b6228	14			20				kernel32 import entry
+b623c	14			20				user32 import entry
+b6250	14			20				gdi32 import entry
+b6264	14			20				advapi32 import entry
+b6278	14			20				dsound import entry
+b62dc	8			8				ddraw lookup table
+b62dc	4			4					DirectDrawCreate lookup (rva 22b8a8)
+b66e0	8			8				ddraw import address table (same as lookup table)
+b6aa8	14			20				DirectDrawCreate Hint/Name table
+b6aa8	2			2					ddraw.dll export table index (index of entry for DirectDrawCreate)
+b6aaa	12			18					DirectDrawCreate function name ("DirectDrawCreate")
+b6abc	a			10				ddraw import name ("DDRAW.dll")
+b7800	b000		45056		.reloc section

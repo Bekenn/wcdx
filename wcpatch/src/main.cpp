@@ -113,74 +113,80 @@ int wmain(int argc, wchar_t* argv[])
 		// Skip to the section tables.
 		file_data.seek(header_size - 2);
 
+		section_header_t section_header;
 		for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index)
 		{
-			section_header_t section_header;
 			file_data.read(section_header);
-			if (strcmp(section_header.name, ".idata") != 0)
-				continue;
+			if (strcmp(section_header.name, ".idata") == 0)
+				break;
+		}
 
-			// Save current position.
-			auto position = file_data.position();
+		// Save current position.
+		auto position = file_data.position();
 
-			// Skip to the import tables.
-			file_data.seek(section_header.raw_data_offset, file::seek_from::beginning);
+		// Skip to the import tables.
+		file_data.seek(section_header.raw_data_offset, file::seek_from::beginning);
 
-			// The import tables specify RVAs for import entries, so we'll need the base
-			// address of the section in order to locate the imports in the input file.
-			uint32_t idata_base_rva = section_header.virtual_address;
+		// The import tables specify RVAs for import entries, so we'll need the base
+		// address of the section in order to locate the imports in the input file.
+		uint32_t idata_base_rva = section_header.virtual_address;
 
-			// Skip past the directory tables.
-			while (true)
+		// Skip past the directory tables.
+		import_entry_t import_entry;
+		while (true)
+		{
+			file_data.read(import_entry);
+			if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
+				return EXIT_FAILURE;
+
+			auto import_entry_position = file_data.position();
+			file_data.seek(section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva, file::seek_from::beginning);
+			string dll_name;
+			char ch;
+			while ((file_data.read(ch), ch) != '\0')
+				dll_name += ch;
+			if (_stricmp(dll_name.c_str(), "ddraw.dll") == 0)
+				break;
+
+			file_data.set_position(import_entry_position);
+		}
+
+		file_data.seek(section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva, file::seek_from::beginning);
+		if (pe_type_signature != OptionalHeader_PE32Signature)
+			return EXIT_FAILURE;
+
+		uint32_t lookup;
+		memory_stream::position_type lookup_position;
+		while (true)
+		{
+			if (!file_data.read(lookup) || lookup == 0)
+				return EXIT_FAILURE;
+
+			if ((lookup & 0x80000000) == 0)
 			{
-				import_entry_t import_entry;
-				file_data.read(import_entry);
-				if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
-					break;
+				lookup_position = file_data.position();
+				file_data.seek(section_header.raw_data_offset + lookup - idata_base_rva + 2, file::seek_from::beginning);
+				auto name_position = file_data.position();
 
-				auto import_entry_position = file_data.position();
-				file_data.seek(section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva, file::seek_from::beginning);
-				string dll_name;
+				string name;
 				char ch;
 				while ((file_data.read(ch), ch) != '\0')
-					dll_name += ch;
-				if (_stricmp(dll_name.c_str(), "ddraw.dll") == 0)
+					name += ch;
+				if (name == "DirectDrawCreate")
 				{
-					file_data.seek(section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva, file::seek_from::beginning);
-					if (pe_type_signature == OptionalHeader_PE32Signature)
-					{
-						uint32_t lookup;
-						while ((file_data.read(lookup), lookup) != 0)
-						{
-							if ((lookup & 0x80000000) == 0)
-							{
-								file_data.seek(section_header.raw_data_offset + lookup - idata_base_rva + 2, file::seek_from::beginning);
-								string name;
-								while ((file_data.read(ch), ch) != '\0')
-									name += ch;
-							}
-						}
-					}
-					else
-					{
-						uint64_t lookup;
-						while ((file_data.read(lookup), lookup) != 0)
-						{
-							if ((lookup & 0x8000000000000000) == 0)
-							{
-								file_data.seek(section_header.raw_data_offset + uint32_t(lookup) - idata_base_rva + 2, file::seek_from::beginning);
-								string name;
-								while ((file_data.read(ch), ch) != '\0')
-									name += ch;
-							}
-						}
-					}
+					file_data.set_position(name_position);
+					break;
 				}
-
-				file_data.set_position(import_entry_position);
+				file_data.set_position(lookup_position);
 			}
 		}
 
+		string_view function_name = "WcdxCreate";
+		file_data.write(function_name.data(), function_name.length() * sizeof(char));
+		file_data.write('\0');
+
+		file_data.set_position(lookup_position);
+		file_data.write(0);
 		return EXIT_SUCCESS;
 	}
 	catch (...)

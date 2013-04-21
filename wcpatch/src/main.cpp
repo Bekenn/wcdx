@@ -175,12 +175,14 @@ int wmain(int argc, wchar_t* argv[])
 				if (name == "DirectDrawCreate")
 				{
 					file_data.set_position(name_position);
+					file_data.seek(-2);
 					break;
 				}
 				file_data.set_position(lookup_position);
 			}
 		}
 
+		file_data.write(uint16_t(0));
 		string_view function_name = "WcdxCreate";
 		file_data.write(function_name.data(), function_name.length() * sizeof(char));
 		file_data.write('\0');

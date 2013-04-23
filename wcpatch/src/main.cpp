@@ -2,7 +2,6 @@
 
 #include <iolib/file_stream.h>
 #include <iolib/stream.h>
-#include <windows_error.h>
 
 #include <algorithm>
 #include <iostream>
@@ -17,7 +16,6 @@
 
 using namespace std;
 using namespace iolib;
-using namespace windows;
 
 struct section_header_t
 {
@@ -43,6 +41,7 @@ struct import_entry_t
 };
 
 static bool patch_imports(stream& file_data);
+static bool apply_dif(stream& file_data);
 
 static const import_entry_t import_entry_null = { };
 
@@ -206,4 +205,8 @@ bool patch_imports(stream& file_data)
 	file_data.set_position(lookup_position);
 	file_data.write(0);
 	return true;
+}
+
+bool apply_dif(stream& file_data)
+{
 }

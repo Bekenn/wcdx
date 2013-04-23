@@ -78,6 +78,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="res\Win32\resources.h" />
     <ClInclude Include="src\common.h" />
   </ItemGroup>
   <ItemGroup>
@@ -94,6 +95,12 @@
     <ProjectReference Include="..\..\windows\windows_error\windows_error.vcxproj">
       <Project>{fd3721c7-27c7-4eb3-997c-b0ad6263675b}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\Wing1.dif" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\Win32\resources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

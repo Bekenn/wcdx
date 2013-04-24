@@ -1,4 +1,6 @@
 #include "common.h"
+#include "resource_stream.h"
+#include "../res/resources.h"
 
 #include <iolib/file_stream.h>
 
@@ -77,6 +79,9 @@ int wmain(int argc, wchar_t* argv[])
 		memory_stream file_data(file_buffer.data(), file_buffer.size());
 
 		if (!patch_imports(file_data))
+			return EXIT_FAILURE;
+
+		if (!apply_dif(file_data))
 			return EXIT_FAILURE;
 
 		return EXIT_SUCCESS;
@@ -208,4 +213,6 @@ bool patch_imports(stream& file_data)
 
 bool apply_dif(stream& file_data)
 {
+	resource_stream resource(RESOURCE_ID_WING1_DIFF);
+	return true;
 }

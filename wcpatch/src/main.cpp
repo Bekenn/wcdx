@@ -103,7 +103,7 @@ bool patch_imports(stream& file_data)
 	// Read PE signature
 	file_data.seek(offset, stream::seek_from::beginning);
 	char signature[4];
-	file_data.read(signature, sizeof(signature));
+	file_data.read(signature);
 	if (!equal(begin(signature), end(signature), begin(PESignature)))
 	{
 		wcerr << L"Error: Input file is not a valid executable." << endl;
@@ -214,5 +214,12 @@ bool patch_imports(stream& file_data)
 bool apply_dif(stream& file_data)
 {
 	resource_stream resource(RESOURCE_ID_WING1_DIFF);
+	static const char diff_tag[] = "This difference file has been created by IDA Pro";
+	const char* tag_p = diff_tag;
+	char ch;
+	do
+		resource.read(ch);
+	while (ch == *tag_p++ && tag_p < end(diff_tag) - 1);
+
 	return true;
 }

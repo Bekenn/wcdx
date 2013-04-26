@@ -3,6 +3,7 @@
 #include "../res/resources.h"
 
 #include <iolib/file_stream.h>
+#include <iolib/string_view.h>
 
 #include <algorithm>
 #include <iostream>
@@ -41,8 +42,10 @@ struct import_entry_t
 	uint32_t import_table_virtual_address;
 };
 
-static bool patch_imports(stream& file_data);
-static bool apply_dif(stream& file_data);
+static bool patch_imports(seekable_stream& file_data);
+static bool apply_dif(seekable_stream& file_data);
+
+static string read_line(seekable_input_stream& is);
 
 static const import_entry_t import_entry_null = { };
 
@@ -93,7 +96,7 @@ int wmain(int argc, wchar_t* argv[])
 	return EXIT_FAILURE;
 }
 
-bool patch_imports(stream& file_data)
+bool patch_imports(seekable_stream& file_data)
 {
 	// Read offset of PE header
 	file_data.seek(0x3C);
@@ -101,7 +104,7 @@ bool patch_imports(stream& file_data)
 	file_data.read(offset);
 
 	// Read PE signature
-	file_data.seek(offset, stream::seek_from::beginning);
+	file_data.seek(offset, seekable_stream::seek_from::beginning);
 	char signature[4];
 	file_data.read(signature);
 	if (!equal(begin(signature), end(signature), begin(PESignature)))
@@ -211,15 +214,68 @@ bool patch_imports(stream& file_data)
 	return true;
 }
 
-bool apply_dif(stream& file_data)
+bool apply_dif(seekable_stream& file_data)
 {
 	resource_stream resource(RESOURCE_ID_WING1_DIFF);
-	static const char diff_tag[] = "This difference file has been created by IDA Pro";
-	const char* tag_p = diff_tag;
-	char ch;
-	do
-		resource.read(ch);
-	while (ch == *tag_p++ && tag_p < end(diff_tag) - 1);
+	string line = read_line(resource);
+	if (line != "This difference file has been created by IDA Pro")
+		return false;
+
+	while (!file_data.at_end())
+	{
+		line = read_line(resource);
+		if (line.empty())
+			continue;
+		if (line == "Wing1.exe")
+			continue;
+
+		auto n = line.find(':');
+		if (n == string::npos)
+			return false;
+		string_view address_str(line, 0, n);
+
+		n = line.find_first_not_of(' ', n + 1);
+		if (n == string::npos)
+			return false;
+		auto m = line.find(' ', n);
+		if (n == string::npos)
+			return false;
+		string_view original_value_str(line, n, m - n);
+
+		n = line.find_first_not_of(' ', m + 1);
+		if (n == string::npos)
+			return false;
+		m = line.find(' ', n);
+		if (m == string::npos)
+			m = line.length();
+		string_view replacement_value_str(line, n, m - n);
+
+		if (line.find_first_not_of(' ', m + 1) != string::npos)
+			return false;
+
+		if (original_value_str == "FFFFFFFF")
+			continue;
+	}
 
 	return true;
+}
+
+string read_line(seekable_input_stream& is)
+{
+	auto position = is.position();
+	size_t length = 0;
+	char ch;
+	while (is.read(ch) && (ch != '\r') && (ch != '\n'))
+		++length;
+	is.set_position(position);
+
+	string line;
+	line.reserve(length);
+	while (is.read(ch) && (ch != '\r') && (ch != '\n'))
+		line += ch;
+
+	if ((ch == '\r') && is.read(ch) && (ch != '\n'))
+		is.seek(-1);
+
+	return line;
 }

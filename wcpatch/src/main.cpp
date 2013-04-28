@@ -221,7 +221,7 @@ bool apply_dif(seekable_stream& file_data)
 	if (line != "This difference file has been created by IDA Pro")
 		return false;
 
-	while (!file_data.at_end())
+	while (!resource.at_end())
 	{
 		line = read_line(resource);
 		if (line.empty())
@@ -255,6 +255,17 @@ bool apply_dif(seekable_stream& file_data)
 
 		if (original_value_str == "FFFFFFFF")
 			continue;
+
+		uint32_t offset = stoul(address_str, nullptr, 16);
+		uint8_t original_value = uint8_t(stoul(original_value_str, nullptr, 16));
+		uint8_t replacement_value = uint8_t(stoul(replacement_value_str, nullptr, 16));
+
+		file_data.seek(offset, seekable_stream::seek_from::beginning);
+		uint8_t value;
+		if (!file_data.read(value) || value != original_value)
+			return false;
+		file_data.seek(-1);
+		file_data.write(replacement_value);
 	}
 
 	return true;

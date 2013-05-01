@@ -87,6 +87,8 @@ int wmain(int argc, wchar_t* argv[])
 		if (!apply_dif(file_data))
 			return EXIT_FAILURE;
 
+		file output_file(argv[2], file::mode::open_or_create | file::mode::write);
+		output_file.write(file_buffer.data(), file_buffer.size());
 		return EXIT_SUCCESS;
 	}
 	catch (...)
@@ -163,12 +165,18 @@ bool patch_imports(seekable_stream& file_data)
 
 		auto import_entry_position = file_data.position();
 		file_data.seek(section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva, file::seek_from::beginning);
+		auto import_name_position = file_data.position();
 		string dll_name;
 		char ch;
 		while ((file_data.read(ch), ch) != '\0')
 			dll_name += ch;
 		if (_stricmp(dll_name.c_str(), "ddraw.dll") == 0)
+		{
+			file_data.set_position(import_name_position);
+			const char import_name[] = "wcdx.dll";
+			file_data.write(import_name, lengthof(import_name));
 			break;
+		}
 
 		file_data.set_position(import_entry_position);
 	}

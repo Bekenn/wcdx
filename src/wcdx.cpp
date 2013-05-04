@@ -65,8 +65,19 @@ Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)),
 	HRESULT hr;
 	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
 		_com_raise_error(hr);
-	if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
+
+	// Check back buffer format.  If this is already D3DFMT_X8R8G8B8, then we don't need an extra surface.
+	IDirect3DSurface9Ptr backBuffer;
+	if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
 		_com_raise_error(hr);
+	D3DSURFACE_DESC desc;
+	if (FAILED(hr = backBuffer->GetDesc(&desc)))
+		_com_raise_error(hr);
+	if (desc.Format != D3DFMT_X8R8G8B8)
+	{
+		if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
+			_com_raise_error(hr);
+	}
 
 	WcdxColor defColor = { 0, 0, 0, 0xFF };
 	fill(begin(palette), end(palette), defColor);
@@ -159,9 +170,14 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 	{
 		at_scope_exit([&]{ device->EndScene(); });
 
+		IDirect3DSurface9Ptr backBuffer;
+		if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+			return hr;
+
+		IDirect3DSurface9Ptr& buffer = surface != nullptr ? surface : backBuffer;
 		D3DLOCKED_RECT locked;
 		RECT bounds = { 0, 0, 320, 200 };
-		if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
+		if (FAILED(hr = buffer->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
 			return hr;
 		const BYTE* src = framebuffer;
 		WcdxColor* dest = static_cast<WcdxColor*>(locked.pBits);
@@ -175,13 +191,14 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 			src += 320;
 			dest += locked.Pitch / sizeof(*dest);
 		}
-		hr = surface->UnlockRect();
+		hr = buffer->UnlockRect();
 
-		IDirect3DSurface9Ptr backBuffer;
-		if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-			return hr;
-		if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_POINT)))
-			return hr;
+		if (surface != nullptr)
+		{
+			if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_POINT)))
+				return hr;
+		}
+
 		dirty = false;
 	}
 

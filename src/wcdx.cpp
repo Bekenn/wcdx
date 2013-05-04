@@ -21,9 +21,41 @@ WCDXAPI IWcdx* WcdxCreate(HWND window)
 
 Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
 {
+	// Resize the window to be 4:3.
+	RECT clientRect;
+	if (!::GetClientRect(window, &clientRect))
+		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+
+	LONG width = (4 * clientRect.bottom) / 3;
+	LONG height = (3 * clientRect.right) / 4;
+	if (width < clientRect.right)
+	{
+		clientRect.right = width;
+		height = clientRect.bottom;
+	}
+	else
+	{
+		clientRect.bottom = height;
+		width = clientRect.right;
+	}
+
+	RECT windowRect;
+	if (!::GetWindowRect(window, &windowRect))
+		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+
+	DWORD style = ::GetWindowLong(window, GWL_STYLE);
+	DWORD exstyle = ::GetWindowLong(window, GWL_EXSTYLE);
+	if (!::AdjustWindowRectEx(&clientRect, style, FALSE, exstyle))
+		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+
+	LONG dx = ((windowRect.right - windowRect.left) - (clientRect.right - clientRect.left)) / 2;
+	LONG dy = ((windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top)) / 2;
+	if (!::MoveWindow(window, windowRect.left + dx, windowRect.top + dy, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, FALSE))
+		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+
 	D3DPRESENT_PARAMETERS params =
 	{
-		1024, 768, D3DFMT_UNKNOWN, 1,
+		320, 200, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
 		D3DSWAPEFFECT_DISCARD, nullptr, TRUE,
 		FALSE, D3DFMT_UNKNOWN,

@@ -9,6 +9,14 @@ cpp_quote("#endif")
 
 interface IWcdx;
 
+typedef struct
+{
+	BYTE blue;
+	BYTE green;
+	BYTE red;
+	BYTE alpha;
+} WcdxColor;
+
 cpp_quote("WCDXAPI")
 IWcdx* WcdxCreate(HWND window);
 
@@ -19,8 +27,8 @@ IWcdx* WcdxCreate(HWND window);
 ]
 interface IWcdx : IUnknown
 {
-	HRESULT SetPalette([in] const PALETTEENTRY entries[256]);
-	HRESULT UpdatePalette(UINT index, [in, ref] const PALETTEENTRY* entry);
+	HRESULT SetPalette([in] const WcdxColor entries[256]);
+	HRESULT UpdatePalette(UINT index, [in, ref] const WcdxColor* entry);
 	HRESULT UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, [in, size_is(height * pitch)] const byte* bits);
 	HRESULT Present();
 }

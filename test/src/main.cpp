@@ -134,7 +134,7 @@ void ShowImage(HWND window, Bitmap& image)
 	image.GetPalette(&palette, paletteData.size());
 
 	assert(palette.Count == 256);
-	windowData.wcdx->SetPalette(reinterpret_cast<PALETTEENTRY*>(palette.Entries));
+	windowData.wcdx->SetPalette(reinterpret_cast<WcdxColor*>(palette.Entries));
 
 	Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
 	BitmapData bits;

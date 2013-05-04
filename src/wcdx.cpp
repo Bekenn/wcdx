@@ -36,7 +36,7 @@ Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)),
 	if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
 		_com_raise_error(hr);
 
-	RGBQUAD defColor = { 0, 0, 0, 0xFF };
+	WcdxColor defColor = { 0, 0, 0, 0xFF };
 	fill(begin(palette), end(palette), defColor);
 }
 
@@ -77,23 +77,16 @@ ULONG STDMETHODCALLTYPE Wcdx::Release()
 	return ref_count;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const PALETTEENTRY entries[256])
+HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const WcdxColor entries[256])
 {
-	transform(entries, entries + 256, palette, [](PALETTEENTRY pe)
-	{
-		RGBQUAD color = { pe.peRed, pe.peGreen, pe.peBlue, 0xFF };
-		return color;
-	});
+	copy(entries, entries + 256, palette);
 	dirty = true;
 	return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::UpdatePalette(UINT index, const PALETTEENTRY* entry)
+HRESULT STDMETHODCALLTYPE Wcdx::UpdatePalette(UINT index, const WcdxColor* entry)
 {
-	palette[index].rgbRed = entry->peRed;
-	palette[index].rgbGreen = entry->peGreen;
-	palette[index].rgbBlue = entry->peBlue;
-	palette[index].rgbReserved = 0xFF;
+	palette[index] = *entry;
 	dirty = true;
 	return S_OK;
 }
@@ -139,7 +132,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 		if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
 			return hr;
 		const BYTE* src = framebuffer;
-		RGBQUAD* dest = static_cast<RGBQUAD*>(locked.pBits);
+		WcdxColor* dest = static_cast<WcdxColor*>(locked.pBits);
 		for (int row = 0; row < 200; ++row)
 		{
 			transform(src, src + 320, dest, [&](BYTE index)

@@ -23,8 +23,8 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override;
 
 	// IWcdx
-	HRESULT STDMETHODCALLTYPE SetPalette(const PALETTEENTRY entries[256]) override;
-	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const PALETTEENTRY* entry) override;
+	HRESULT STDMETHODCALLTYPE SetPalette(const WcdxColor entries[256]) override;
+	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const WcdxColor* entry) override;
     HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
     HRESULT STDMETHODCALLTYPE Present() override;
 
@@ -40,7 +40,7 @@ private:
 	IDirect3DSurface9Ptr surface;
 #pragma warning(pop)
 
-	RGBQUAD palette[256];
+	WcdxColor palette[256];
 	BYTE framebuffer[320 * 200];
 	bool dirty;
 };

@@ -32,6 +32,7 @@ struct WindowData
 	IWcdx* wcdx;
 	vector<unique_ptr<Bitmap>> images;
 	size_t imageIndex;
+	bool fullScreen;
 };
 
 static unique_ptr<Bitmap> LoadPng(LPCWSTR resource);
@@ -40,6 +41,7 @@ static void ShowImage(HWND window, Bitmap& image);
 static bool OnCreate(HWND window, const CREATESTRUCT& create);
 static void OnDestroy(HWND window);
 static void OnShowWindow(HWND window, bool show, DWORD reason);
+static void OnSysKeyDown(HWND window, DWORD keyCode, WORD repeatCount, BYTE scanCode, BYTE flags);
 static void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags);
 static void OnRender(HWND window);
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -166,6 +168,16 @@ void OnShowWindow(HWND window, bool show, DWORD reason)
 		::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
+void OnSysKeyDown(HWND window, DWORD keyCode, WORD repeatCount, BYTE scanCode, BYTE flags)
+{
+	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	if ((keyCode == VK_RETURN) && ((flags & 0x60) == 0x20))
+	{
+		if (SUCCEEDED(windowData.wcdx->SetFullScreen(!windowData.fullScreen)))
+			windowData.fullScreen = !windowData.fullScreen;
+	}
+}
+
 void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags)
 {
 	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
@@ -206,6 +218,13 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	case WM_SHOWWINDOW:
 		OnShowWindow(hWnd, wParam != FALSE, lParam);
+		break;
+
+	case WM_SYSKEYDOWN:
+		OnSysKeyDown(hWnd, wParam, LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam)));
+		break;
+
+	case WM_SYSCOMMAND:
 		break;
 
 	case WM_LBUTTONUP:

@@ -23,6 +23,7 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override;
 
 	// IWcdx
+    HRESULT STDMETHODCALLTYPE SetFullScreen(BOOL enabled) override;
 	HRESULT STDMETHODCALLTYPE SetPalette(const WcdxColor entries[256]) override;
 	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const WcdxColor* entry) override;
     HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
@@ -30,6 +31,10 @@ public:
 
 private:
 	ULONG ref_count;
+	HWND window;
+	RECT windowRect;
+	DWORD windowStyle;
+	DWORD windowExStyle;
 
 	// Suppress warnings about IDirect3D9Ptr not being exported -- they're not
 	// directly usable by clients, so it doesn't matter.
@@ -43,6 +48,7 @@ private:
 	WcdxColor palette[256];
 	BYTE framebuffer[320 * 200];
 	bool dirty;
+	bool fullScreen;
 };
 
 #endif

@@ -19,7 +19,7 @@ WCDXAPI IWcdx* WcdxCreate(HWND window)
 	}
 }
 
-Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false)
+Wcdx::Wcdx(HWND window) : ref_count(1), window(window), d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false), fullScreen(false)
 {
 	// Resize the window to be 4:3.
 	RECT clientRect;
@@ -43,14 +43,18 @@ Wcdx::Wcdx(HWND window) : ref_count(1), d3d(::Direct3DCreate9(D3D_SDK_VERSION)),
 	if (!::GetWindowRect(window, &windowRect))
 		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
 
-	DWORD style = ::GetWindowLong(window, GWL_STYLE);
-	DWORD exstyle = ::GetWindowLong(window, GWL_EXSTYLE);
-	if (!::AdjustWindowRectEx(&clientRect, style, FALSE, exstyle))
+	DWORD windowStyle = ::GetWindowLong(window, GWL_STYLE);
+	DWORD windowExStyle = ::GetWindowLong(window, GWL_EXSTYLE);
+	if (!::AdjustWindowRectEx(&clientRect, windowStyle, FALSE, windowExStyle))
 		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
 
-	LONG dx = ((windowRect.right - windowRect.left) - (clientRect.right - clientRect.left)) / 2;
-	LONG dy = ((windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top)) / 2;
-	if (!::MoveWindow(window, windowRect.left + dx, windowRect.top + dy, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top, FALSE))
+	width = clientRect.right - clientRect.left;
+	height = clientRect.bottom - clientRect.top;
+	windowRect.left += ((windowRect.right - windowRect.left) - (clientRect.right - clientRect.left)) / 2;
+	windowRect.top += ((windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top)) / 2;
+	windowRect.right = windowRect.left + width;
+	windowRect.bottom = windowRect.top + height;
+	if (!::MoveWindow(window, windowRect.left, windowRect.top, width, height, FALSE))
 		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
 
 	D3DPRESENT_PARAMETERS params =
@@ -118,6 +122,78 @@ ULONG STDMETHODCALLTYPE Wcdx::Release()
 	}
 
 	return ref_count;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::SetFullScreen(BOOL enabled)
+{
+	if ((enabled != FALSE) == fullScreen)
+		return S_OK;
+
+	if (enabled)
+	{
+		HMONITOR monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+		if (monitor == nullptr)
+			return HRESULT_FROM_WIN32(::GetLastError());
+
+		MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+		if (!::GetMonitorInfo(monitor, &monitorInfo))
+			return HRESULT_FROM_WIN32(::GetLastError());
+
+		if (!::GetWindowRect(window, &windowRect))
+			return HRESULT_FROM_WIN32(::GetLastError());
+
+		::SetLastError(0);
+		windowStyle = ::SetWindowLong(window, GWL_STYLE, WS_OVERLAPPED);
+		if ((windowStyle == 0) && (::GetLastError() != 0))
+			return HRESULT_FROM_WIN32(::GetLastError());
+
+		windowExStyle = ::SetWindowLong(window, GWL_EXSTYLE, 0);
+		if ((windowExStyle == 0) && (::GetLastError() != 0))
+		{
+			::SetWindowLong(window, GWL_STYLE, windowStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+
+		if (!::SetWindowPos(window, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
+		{
+			::SetWindowLong(window, GWL_EXSTYLE, windowExStyle);
+			::SetWindowLong(window, GWL_STYLE, windowStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+
+		fullScreen = true;
+	}
+	else
+	{
+		::SetLastError(0);
+		DWORD style = ::SetWindowLong(window, GWL_STYLE, windowStyle);
+		if ((style == 0) && (::GetLastError() != 0))
+			return HRESULT_FROM_WIN32(::GetLastError());
+
+		DWORD exStyle = ::SetWindowLong(window, GWL_EXSTYLE, windowExStyle);
+		if ((exStyle == 0) && (::GetLastError() != 0))
+		{
+			::SetWindowLong(window, GWL_STYLE, style);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+
+		if (!::SetWindowPos(window, HWND_TOP, windowRect.left, windowRect.top,
+			windowRect.right - windowRect.left,
+			windowRect.bottom - windowRect.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
+		{
+			::SetWindowLong(window, GWL_STYLE, style);
+			::SetWindowLong(window, GWL_EXSTYLE, exStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+
+		fullScreen = false;
+	}
+
+	return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const WcdxColor entries[256])

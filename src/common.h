@@ -33,4 +33,7 @@ scope_guard<Callback> make_scope_guard(Callback cb)
 	return scope_guard<Callback>(cb);
 }
 
+
+extern HINSTANCE DllInstance;
+
 #endif

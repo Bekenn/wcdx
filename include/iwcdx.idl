@@ -17,8 +17,7 @@ typedef struct
 	BYTE alpha;
 } WcdxColor;
 
-cpp_quote("WCDXAPI")
-IWcdx* WcdxCreate(HWND window);
+cpp_quote("WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen);")
 
 [
 	local,
@@ -27,7 +26,7 @@ IWcdx* WcdxCreate(HWND window);
 ]
 interface IWcdx : IUnknown
 {
-	HRESULT SetFullScreen(BOOL enabled);
+	HRESULT SetVisible(BOOL visible);
 	HRESULT SetPalette([in] const WcdxColor entries[256]);
 	HRESULT UpdatePalette(UINT index, [in, ref] const WcdxColor* entry);
 	HRESULT UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, [in, size_is(height * pitch)] const byte* bits);

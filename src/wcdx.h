@@ -11,7 +11,8 @@
 class Wcdx : public IWcdx
 {
 public:
-	Wcdx(HWND window);
+	Wcdx(LPCWSTR title, WNDPROC windowProc);
+	~Wcdx();
 private:
 	Wcdx(const Wcdx&);
 	Wcdx& operator = (const Wcdx&);
@@ -23,18 +24,34 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override;
 
 	// IWcdx
-    HRESULT STDMETHODCALLTYPE SetFullScreen(BOOL enabled) override;
+    HRESULT STDMETHODCALLTYPE SetVisible(BOOL visible) override;
 	HRESULT STDMETHODCALLTYPE SetPalette(const WcdxColor entries[256]) override;
 	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const WcdxColor* entry) override;
     HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
     HRESULT STDMETHODCALLTYPE Present() override;
 
 private:
-	ULONG ref_count;
-	HWND window;
-	RECT windowRect;
-	DWORD windowStyle;
-	DWORD windowExStyle;
+	static ATOM FrameWindowClass();
+	static ATOM ContentWindowClass();
+	static LRESULT CALLBACK FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+	void OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight);
+	void OnNCDestroy();
+	bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
+	void OnRender();
+
+	void SetFullScreen(bool enabled);
+	void GetContentRect(RECT& contentRect);
+
+private:
+	ULONG refCount;
+	HWND frameWindow;
+	HWND contentWindow;
+	WNDPROC clientWindowProc;
+	DWORD frameStyle;
+	DWORD frameExStyle;
+	RECT frameRect;
 
 	// Suppress warnings about IDirect3D9Ptr not being exported -- they're not
 	// directly usable by clients, so it doesn't matter.
@@ -47,8 +64,9 @@ private:
 
 	WcdxColor palette[256];
 	BYTE framebuffer[320 * 200];
-	bool dirty;
+
 	bool fullScreen;
+	bool dirty;
 };
 
 #endif

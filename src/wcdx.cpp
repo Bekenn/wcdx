@@ -7,11 +7,16 @@
 
 using namespace std;
 
-WCDXAPI IWcdx* WcdxCreate(HWND window)
+enum
+{
+	WM_APP_RENDER = WM_APP
+};
+
+WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen)
 {
 	try
 	{
-		return new Wcdx(window);
+		return new Wcdx(windowTitle, windowProc);
 	}
 	catch (const _com_error&)
 	{
@@ -19,55 +24,35 @@ WCDXAPI IWcdx* WcdxCreate(HWND window)
 	}
 }
 
-Wcdx::Wcdx(HWND window) : ref_count(1), window(window), d3d(::Direct3DCreate9(D3D_SDK_VERSION)), dirty(false), fullScreen(false)
+Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false)
 {
-	// Resize the window to be 4:3.
-	RECT clientRect;
-	if (!::GetClientRect(window, &clientRect))
-		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+	frameWindow = ::CreateWindowEx(frameExStyle,
+		reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
+		frameStyle,
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+		nullptr, nullptr, DllInstance, this);
 
-	LONG width = (4 * clientRect.bottom) / 3;
-	LONG height = (3 * clientRect.right) / 4;
-	if (width < clientRect.right)
-	{
-		clientRect.right = width;
-		height = clientRect.bottom;
-	}
-	else
-	{
-		clientRect.bottom = height;
-		width = clientRect.right;
-	}
+	::GetWindowRect(frameWindow, &frameRect);
 
-	RECT windowRect;
-	if (!::GetWindowRect(window, &windowRect))
-		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+	RECT contentRect;
+	GetContentRect(contentRect);
+	contentWindow = ::CreateWindowEx(0, reinterpret_cast<LPCWSTR>(ContentWindowClass()), nullptr, WS_VISIBLE | WS_CHILD,
+		contentRect.left, contentRect.top, contentRect.right - contentRect.left, contentRect.bottom - contentRect.top,
+		frameWindow, nullptr, DllInstance, static_cast<IWcdx*>(this));
 
-	DWORD windowStyle = ::GetWindowLong(window, GWL_STYLE);
-	DWORD windowExStyle = ::GetWindowLong(window, GWL_EXSTYLE);
-	if (!::AdjustWindowRectEx(&clientRect, windowStyle, FALSE, windowExStyle))
-		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
-
-	width = clientRect.right - clientRect.left;
-	height = clientRect.bottom - clientRect.top;
-	windowRect.left += ((windowRect.right - windowRect.left) - (clientRect.right - clientRect.left)) / 2;
-	windowRect.top += ((windowRect.bottom - windowRect.top) - (clientRect.bottom - clientRect.top)) / 2;
-	windowRect.right = windowRect.left + width;
-	windowRect.bottom = windowRect.top + height;
-	if (!::MoveWindow(window, windowRect.left, windowRect.top, width, height, FALSE))
-		_com_raise_error(HRESULT_FROM_WIN32(::GetLastError()));
+	d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
 
 	D3DPRESENT_PARAMETERS params =
 	{
 		320, 200, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
-		D3DSWAPEFFECT_DISCARD, nullptr, TRUE,
+		D3DSWAPEFFECT_DISCARD, contentWindow, TRUE,
 		FALSE, D3DFMT_UNKNOWN,
 		D3DPRESENTFLAG_LOCKABLE_BACKBUFFER, 0, D3DPRESENT_INTERVAL_DEFAULT
 	};
 
 	HRESULT hr;
-	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
+	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, frameWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
 		_com_raise_error(hr);
 
 	// Check back buffer format.  If this is already D3DFMT_X8R8G8B8, then we don't need an extra surface.
@@ -87,6 +72,12 @@ Wcdx::Wcdx(HWND window) : ref_count(1), window(window), d3d(::Direct3DCreate9(D3
 	fill(begin(palette), end(palette), defColor);
 }
 
+Wcdx::~Wcdx()
+{
+	if (frameWindow != nullptr)
+		::DestroyWindow(frameWindow);
+}
+
 HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 {
 	if (ppvObject == nullptr)
@@ -95,13 +86,13 @@ HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 	if (IsEqualIID(riid, IID_IUnknown))
 	{
 		*reinterpret_cast<IUnknown**>(ppvObject) = this;
-		++ref_count;
+		++refCount;
 		return S_OK;
 	}
 	if (IsEqualIID(riid, IID_IWcdx))
 	{
 		*reinterpret_cast<IWcdx**>(ppvObject) = this;
-		++ref_count;
+		++refCount;
 		return S_OK;
 	}
 
@@ -110,89 +101,25 @@ HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 
 ULONG STDMETHODCALLTYPE Wcdx::AddRef()
 {
-	return ++ref_count;
+	return ++refCount;
 }
 
 ULONG STDMETHODCALLTYPE Wcdx::Release()
 {
-	if (--ref_count == 0)
+	if (--refCount == 0)
 	{
 		delete this;
 		return 0;
 	}
 
-	return ref_count;
+	return refCount;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::SetFullScreen(BOOL enabled)
+HRESULT STDMETHODCALLTYPE Wcdx::SetVisible(BOOL visible)
 {
-	if ((enabled != FALSE) == fullScreen)
-		return S_OK;
-
-	if (enabled)
-	{
-		HMONITOR monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
-		if (monitor == nullptr)
-			return HRESULT_FROM_WIN32(::GetLastError());
-
-		MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
-		if (!::GetMonitorInfo(monitor, &monitorInfo))
-			return HRESULT_FROM_WIN32(::GetLastError());
-
-		if (!::GetWindowRect(window, &windowRect))
-			return HRESULT_FROM_WIN32(::GetLastError());
-
-		::SetLastError(0);
-		windowStyle = ::SetWindowLong(window, GWL_STYLE, WS_OVERLAPPED);
-		if ((windowStyle == 0) && (::GetLastError() != 0))
-			return HRESULT_FROM_WIN32(::GetLastError());
-
-		windowExStyle = ::SetWindowLong(window, GWL_EXSTYLE, 0);
-		if ((windowExStyle == 0) && (::GetLastError() != 0))
-		{
-			::SetWindowLong(window, GWL_STYLE, windowStyle);
-			return HRESULT_FROM_WIN32(::GetLastError());
-		}
-
-		if (!::SetWindowPos(window, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
-			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
-			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
-		{
-			::SetWindowLong(window, GWL_EXSTYLE, windowExStyle);
-			::SetWindowLong(window, GWL_STYLE, windowStyle);
-			return HRESULT_FROM_WIN32(::GetLastError());
-		}
-
-		fullScreen = true;
-	}
-	else
-	{
-		::SetLastError(0);
-		DWORD style = ::SetWindowLong(window, GWL_STYLE, windowStyle);
-		if ((style == 0) && (::GetLastError() != 0))
-			return HRESULT_FROM_WIN32(::GetLastError());
-
-		DWORD exStyle = ::SetWindowLong(window, GWL_EXSTYLE, windowExStyle);
-		if ((exStyle == 0) && (::GetLastError() != 0))
-		{
-			::SetWindowLong(window, GWL_STYLE, style);
-			return HRESULT_FROM_WIN32(::GetLastError());
-		}
-
-		if (!::SetWindowPos(window, HWND_TOP, windowRect.left, windowRect.top,
-			windowRect.right - windowRect.left,
-			windowRect.bottom - windowRect.top,
-			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
-		{
-			::SetWindowLong(window, GWL_STYLE, style);
-			::SetWindowLong(window, GWL_EXSTYLE, exStyle);
-			return HRESULT_FROM_WIN32(::GetLastError());
-		}
-
-		fullScreen = false;
-	}
-
+	if (!::ShowWindow(frameWindow, visible ? SW_SHOW : SW_HIDE))
+		return HRESULT_FROM_WIN32(::GetLastError());
+	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
 	return S_OK;
 }
 
@@ -282,4 +209,268 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 		return hr;
 
 	return S_OK;
+}
+
+ATOM Wcdx::FrameWindowClass()
+{
+	static ATOM windowClass = 0;
+	if (windowClass == 0)
+	{
+		WNDCLASSEX wc =
+		{
+			sizeof(WNDCLASSEX),
+			0,
+			FrameWindowProc,
+			0,
+			0,
+			DllInstance,
+			nullptr,
+			::LoadCursor(nullptr, IDC_ARROW),
+			::CreateSolidBrush(RGB(0, 0, 0)),
+			nullptr,
+			L"Wcdx Frame Window",
+			nullptr
+		};
+
+		windowClass = ::RegisterClassEx(&wc);
+	}
+
+	return windowClass;
+}
+
+ATOM Wcdx::ContentWindowClass()
+{
+	static ATOM windowClass = 0;
+	if (windowClass == 0)
+	{
+		WNDCLASSEX wc =
+		{
+			sizeof(WNDCLASSEX),
+			0,
+			ContentWindowProc,
+			0,
+			0,
+			DllInstance,
+			nullptr,
+			::LoadCursor(nullptr, IDC_ARROW),
+			nullptr,
+			nullptr,
+			L"Wcdx Content Window",
+			nullptr
+		};
+
+		windowClass = ::RegisterClassEx(&wc);
+	}
+
+	return windowClass;
+}
+
+LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	Wcdx* wcdx = reinterpret_cast<Wcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	if (wcdx == nullptr)
+	{
+		switch (message)
+		{
+		case WM_NCCREATE:
+			::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
+			return TRUE;
+		}
+	}
+	else
+	{
+		switch (message)
+		{
+		case WM_SIZE:
+			wcdx->OnSize(wParam, LOWORD(lParam), HIWORD(lParam));
+			return 0;
+
+		case WM_NCDESTROY:
+			wcdx->OnNCDestroy();
+			return 0;
+
+		case WM_SYSKEYDOWN:
+			if (wcdx->OnSysKeyDown(wParam, LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam))))
+				return 0;
+			break;
+
+		case WM_APP_RENDER:
+			wcdx->OnRender();
+			break;
+		}
+	}
+
+	return ::DefWindowProc(hwnd, message, wParam, lParam);
+}
+
+LRESULT CALLBACK Wcdx::ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	IWcdx* wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	if (wcdx == nullptr)
+	{
+		switch (message)
+		{
+		case WM_NCCREATE:
+			wcdx = static_cast<IWcdx*>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams);
+			::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(wcdx));
+			return static_cast<Wcdx*>(wcdx)->clientWindowProc(hwnd, message, wParam, lParam);
+		}
+	}
+	else
+	{
+		return static_cast<Wcdx*>(wcdx)->clientWindowProc(hwnd, message, wParam, lParam);
+	}
+
+	return ::DefWindowProc(hwnd, message, wParam, lParam);
+}
+
+void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
+{
+	RECT contentRect;
+	::InvalidateRect(frameWindow, nullptr, TRUE);
+	GetContentRect(contentRect);
+	::MoveWindow(contentWindow, contentRect.left, contentRect.top, contentRect.right - contentRect.left, contentRect.bottom - contentRect.top, FALSE);
+	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
+}
+
+void Wcdx::OnNCDestroy()
+{
+	frameWindow = nullptr;
+	contentWindow = nullptr;
+}
+
+bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
+{
+	if ((vkey == VK_RETURN) && ((flags & 0x60) == 0x20))
+	{
+		SetFullScreen(!fullScreen);
+		return true;
+	}
+
+	return false;
+}
+
+void Wcdx::OnRender()
+{
+	device->Present(nullptr, nullptr, nullptr, nullptr);
+}
+
+void Wcdx::SetFullScreen(bool enabled)
+{
+	if (enabled == fullScreen)
+		return;
+
+	if (enabled)
+	{
+		HMONITOR monitor = ::MonitorFromWindow(frameWindow, MONITOR_DEFAULTTONEAREST);
+#if 0
+		if (monitor == nullptr)
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+		::GetMonitorInfo(monitor, &monitorInfo);
+#if 0
+		if (!::GetMonitorInfo(monitor, &monitorInfo))
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		::GetWindowRect(frameWindow, &frameRect);
+#if 0
+		if (!::GetWindowRect(window, &windowRect))
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		::SetLastError(0);
+		frameStyle = ::SetWindowLong(frameWindow, GWL_STYLE, WS_OVERLAPPED);
+#if 0
+		if ((windowStyle == 0) && (::GetLastError() != 0))
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		frameExStyle = ::SetWindowLong(frameWindow, GWL_EXSTYLE, 0);
+#if 0
+		if ((windowExStyle == 0) && (::GetLastError() != 0))
+		{
+			::SetWindowLong(window, GWL_STYLE, windowStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+#endif
+
+		::SetWindowPos(frameWindow, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
+#if 0
+		if (!::SetWindowPos(window, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+			monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
+		{
+			::SetWindowLong(window, GWL_EXSTYLE, windowExStyle);
+			::SetWindowLong(window, GWL_STYLE, windowStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+#endif
+
+		fullScreen = true;
+	}
+	else
+	{
+		::SetLastError(0);
+		DWORD style = ::SetWindowLong(frameWindow, GWL_STYLE, frameStyle);
+#if 0
+		if ((style == 0) && (::GetLastError() != 0))
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		DWORD exStyle = ::SetWindowLong(frameWindow, GWL_EXSTYLE, frameExStyle);
+#if 0
+		if ((exStyle == 0) && (::GetLastError() != 0))
+		{
+			::SetWindowLong(window, GWL_STYLE, style);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+#endif
+
+		::SetWindowPos(frameWindow, HWND_TOP, frameRect.left, frameRect.top,
+			frameRect.right - frameRect.left,
+			frameRect.bottom - frameRect.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
+#if 0
+		if (!::SetWindowPos(window, HWND_TOP, windowRect.left, windowRect.top,
+			windowRect.right - windowRect.left,
+			windowRect.bottom - windowRect.top,
+			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW))
+		{
+			::SetWindowLong(window, GWL_STYLE, style);
+			::SetWindowLong(window, GWL_EXSTYLE, exStyle);
+			return HRESULT_FROM_WIN32(::GetLastError());
+		}
+#endif
+
+		fullScreen = false;
+	}
+
+	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
+}
+
+void Wcdx::GetContentRect(RECT& contentRect)
+{
+	::GetClientRect(frameWindow, &contentRect);
+
+	LONG width = (4 * contentRect.bottom) / 3;
+	LONG height = (3 * contentRect.right) / 4;
+	if (width < contentRect.right)
+	{
+		contentRect.left = (contentRect.right - width) / 2;
+		contentRect.right = contentRect.left + width;
+		height = contentRect.bottom;
+	}
+	else
+	{
+		contentRect.top = (contentRect.bottom - height) / 2;
+		contentRect.bottom = contentRect.top + height;
+		width = contentRect.right;
+	}
 }

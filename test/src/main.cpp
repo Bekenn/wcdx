@@ -27,24 +27,17 @@ enum
 	WM_APP_RENDER = WM_APP
 };
 
-struct WindowData
-{
-	IWcdx* wcdx;
-	vector<unique_ptr<Bitmap>> images;
-	size_t imageIndex;
-	bool fullScreen;
-};
-
 static unique_ptr<Bitmap> LoadPng(LPCWSTR resource);
-static void ShowImage(HWND window, Bitmap& image);
+static void ShowImage(IWcdx* wcdx, Bitmap& image);
 
-static bool OnCreate(HWND window, const CREATESTRUCT& create);
 static void OnDestroy(HWND window);
 static void OnShowWindow(HWND window, bool show, DWORD reason);
-static void OnSysKeyDown(HWND window, DWORD keyCode, WORD repeatCount, BYTE scanCode, BYTE flags);
 static void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags);
 static void OnRender(HWND window);
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+static vector<unique_ptr<Bitmap>>* Images;
+static size_t ImageIndex = 0;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCommandLine, int nCmdShow)
 {
@@ -59,37 +52,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 		gdiStartupOutput.NotificationHook(&gdiplusHookToken);
 		at_scope_exit([&]{ gdiStartupOutput.NotificationUnhook(gdiplusHookToken); });
 
-		WNDCLASSEX wc =
-		{
-			sizeof(WNDCLASSEX),
-			0,
-			WindowProc,
-			0, 0,
-			hInstance,
-			nullptr,
-			::LoadCursor(nullptr, IDC_ARROW),
-			reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1),
-			nullptr,
-			L"Wcdx Test Window",
-			nullptr
-		};
-
-		ATOM wcAtom = ::RegisterClassEx(&wc);
-
-		HWND window = ::CreateWindowEx(0, MAKEINTATOM(wcAtom),
-			L"Wcdx Test", WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX),
-			CW_USEDEFAULT, CW_USEDEFAULT, 1024, 768,
-			nullptr, nullptr, hInstance, nullptr);
-		IWcdx* wcdx = WcdxCreate(window);
-		WindowData windowData = { wcdx };
-		::SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&windowData));
-
+		vector<unique_ptr<Bitmap>> images;
 		for (int n = 0; n < 10; ++n)
-			windowData.images.push_back(LoadPng(MAKEINTRESOURCE(IDPNG_SCREEN0 + n)));
+			images.push_back(LoadPng(MAKEINTRESOURCE(IDPNG_SCREEN0 + n)));
+		Images = &images;
 
-		ShowImage(window, *windowData.images[windowData.imageIndex]);
+		if (FAILED(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
+			return EXIT_FAILURE;
+		IWcdx* wcdx = WcdxCreate(L"Wcdx Test", WindowProc, FALSE);
 
-		::ShowWindow(window, nCmdShow);
+		ShowImage(wcdx, *images[ImageIndex]);
+		wcdx->SetVisible(TRUE);
 
 		MSG message;
 		BOOL result;
@@ -99,6 +72,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 				return EXIT_FAILURE;
 			::DispatchMessage(&message);
 		}
+
+		wcdx->Release();
+		::CoUninitialize();
 		return message.wParam;
 	}
 	catch (const _com_error& error)
@@ -127,16 +103,14 @@ unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
 	return nullptr;
 }
 
-void ShowImage(HWND window, Bitmap& image)
+void ShowImage(IWcdx* wcdx, Bitmap& image)
 {
-	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-
 	vector<BYTE> paletteData(image.GetPaletteSize());
 	ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
 	image.GetPalette(&palette, paletteData.size());
 
 	assert(palette.Count == 256);
-	windowData.wcdx->SetPalette(reinterpret_cast<WcdxColor*>(palette.Entries));
+	wcdx->SetPalette(reinterpret_cast<WcdxColor*>(palette.Entries));
 
 	Rect imageRect(0, 0, image.GetWidth(), image.GetHeight());
 	BitmapData bits;
@@ -144,21 +118,11 @@ void ShowImage(HWND window, Bitmap& image)
 	at_scope_exit([&]{ image.UnlockBits(&bits); });
 
 	RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
-	windowData.wcdx->UpdateFrame(updateRect.left, updateRect.top, updateRect.right - updateRect.left, updateRect.bottom - updateRect.top, bits.Stride, reinterpret_cast<byte*>(bits.Scan0));
-}
-
-bool OnCreate(HWND window, const CREATESTRUCT& create)
-{
-	if (FAILED(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
-		return false;
-	return true;
+	wcdx->UpdateFrame(updateRect.left, updateRect.top, updateRect.right - updateRect.left, updateRect.bottom - updateRect.top, bits.Stride, reinterpret_cast<byte*>(bits.Scan0));
 }
 
 void OnDestroy(HWND window)
 {
-	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	windowData.wcdx->Release();
-	::CoUninitialize();
 	::PostQuitMessage(EXIT_SUCCESS);
 }
 
@@ -168,23 +132,13 @@ void OnShowWindow(HWND window, bool show, DWORD reason)
 		::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
-void OnSysKeyDown(HWND window, DWORD keyCode, WORD repeatCount, BYTE scanCode, BYTE flags)
-{
-	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	if ((keyCode == VK_RETURN) && ((flags & 0x60) == 0x20))
-	{
-		if (SUCCEEDED(windowData.wcdx->SetFullScreen(!windowData.fullScreen)))
-			windowData.fullScreen = !windowData.fullScreen;
-	}
-}
-
 void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags)
 {
-	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	if (++windowData.imageIndex == windowData.images.size())
-		windowData.imageIndex = 0;
+	IWcdx* wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	if (++ImageIndex == Images->size())
+		ImageIndex = 0;
 
-	ShowImage(window, *windowData.images[windowData.imageIndex]);
+	ShowImage(wcdx, *(*Images)[ImageIndex]);
 	::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
@@ -193,8 +147,8 @@ void OnRender(HWND window)
 	if (!::IsWindowVisible(window))
 		return;
 
-	WindowData& windowData = *reinterpret_cast<WindowData*>(::GetWindowLongPtr(window, GWLP_USERDATA));
-	windowData.wcdx->Present();
+	IWcdx* wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(window, GWLP_USERDATA));
+	wcdx->Present();
 
 //	::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
@@ -203,28 +157,12 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
-	case WM_NCCREATE:
-		::SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
-		break;
-
-	case WM_CREATE:
-		if (!OnCreate(hWnd, *reinterpret_cast<LPCREATESTRUCT>(lParam)))
-			return -1;
-		break;
-
 	case WM_DESTROY:
 		OnDestroy(hWnd);
 		break;
 
 	case WM_SHOWWINDOW:
 		OnShowWindow(hWnd, wParam != FALSE, lParam);
-		break;
-
-	case WM_SYSKEYDOWN:
-		OnSysKeyDown(hWnd, wParam, LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam)));
-		break;
-
-	case WM_SYSCOMMAND:
 		break;
 
 	case WM_LBUTTONUP:

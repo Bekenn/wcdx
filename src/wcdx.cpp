@@ -219,7 +219,7 @@ ATOM Wcdx::FrameWindowClass()
 		WNDCLASSEX wc =
 		{
 			sizeof(WNDCLASSEX),
-			0,
+			CS_HREDRAW | CS_VREDRAW,
 			FrameWindowProc,
 			0,
 			0,
@@ -327,7 +327,6 @@ LRESULT CALLBACK Wcdx::ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam,
 void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
 {
 	RECT contentRect;
-	::InvalidateRect(frameWindow, nullptr, TRUE);
 	GetContentRect(contentRect);
 	::MoveWindow(contentWindow, contentRect.left, contentRect.top, contentRect.right - contentRect.left, contentRect.bottom - contentRect.top, FALSE);
 	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);

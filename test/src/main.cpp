@@ -59,7 +59,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 
 		if (FAILED(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
 			return EXIT_FAILURE;
-		IWcdx* wcdx = WcdxCreate(L"Wcdx Test", WindowProc, FALSE);
+		IWcdx* wcdx = WcdxCreate(L"Wcdx Test", WindowProc, TRUE);
 
 		ShowImage(wcdx, *images[ImageIndex]);
 		wcdx->SetVisible(TRUE);

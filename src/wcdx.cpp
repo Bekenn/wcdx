@@ -16,7 +16,7 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
 {
 	try
 	{
-		return new Wcdx(windowTitle, windowProc);
+		return new Wcdx(windowTitle, windowProc, fullScreen != FALSE);
 	}
 	catch (const _com_error&)
 	{
@@ -24,7 +24,7 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
 	}
 }
 
-Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false)
+Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false)
 {
 	frameWindow = ::CreateWindowEx(frameExStyle,
 		reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
@@ -70,6 +70,8 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc) : refCount(1), clientWindowProc(wi
 
 	WcdxColor defColor = { 0, 0, 0, 0xFF };
 	fill(begin(palette), end(palette), defColor);
+
+	SetFullScreen(fullScreen);
 }
 
 Wcdx::~Wcdx()
@@ -361,19 +363,6 @@ void Wcdx::SetFullScreen(bool enabled)
 
 	if (enabled)
 	{
-		HMONITOR monitor = ::MonitorFromWindow(frameWindow, MONITOR_DEFAULTTONEAREST);
-#if 0
-		if (monitor == nullptr)
-			return HRESULT_FROM_WIN32(::GetLastError());
-#endif
-
-		MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
-		::GetMonitorInfo(monitor, &monitorInfo);
-#if 0
-		if (!::GetMonitorInfo(monitor, &monitorInfo))
-			return HRESULT_FROM_WIN32(::GetLastError());
-#endif
-
 		::GetWindowRect(frameWindow, &frameRect);
 #if 0
 		if (!::GetWindowRect(window, &windowRect))
@@ -381,7 +370,8 @@ void Wcdx::SetFullScreen(bool enabled)
 #endif
 
 		::SetLastError(0);
-		frameStyle = ::SetWindowLong(frameWindow, GWL_STYLE, WS_OVERLAPPED);
+		frameStyle = ::GetWindowLong(frameWindow, GWL_STYLE);
+		::SetWindowLong(frameWindow, GWL_STYLE, WS_OVERLAPPED);
 #if 0
 		if ((windowStyle == 0) && (::GetLastError() != 0))
 			return HRESULT_FROM_WIN32(::GetLastError());
@@ -394,6 +384,19 @@ void Wcdx::SetFullScreen(bool enabled)
 			::SetWindowLong(window, GWL_STYLE, windowStyle);
 			return HRESULT_FROM_WIN32(::GetLastError());
 		}
+#endif
+
+		HMONITOR monitor = ::MonitorFromWindow(frameWindow, MONITOR_DEFAULTTONEAREST);
+#if 0
+		if (monitor == nullptr)
+			return HRESULT_FROM_WIN32(::GetLastError());
+#endif
+
+		MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+		::GetMonitorInfo(monitor, &monitorInfo);
+#if 0
+		if (!::GetMonitorInfo(monitor, &monitorInfo))
+			return HRESULT_FROM_WIN32(::GetLastError());
 #endif
 
 		::SetWindowPos(frameWindow, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
@@ -411,7 +414,6 @@ void Wcdx::SetFullScreen(bool enabled)
 			return HRESULT_FROM_WIN32(::GetLastError());
 		}
 #endif
-
 		fullScreen = true;
 	}
 	else
@@ -447,7 +449,6 @@ void Wcdx::SetFullScreen(bool enabled)
 			return HRESULT_FROM_WIN32(::GetLastError());
 		}
 #endif
-
 		fullScreen = false;
 	}
 

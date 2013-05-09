@@ -11,7 +11,7 @@
 class Wcdx : public IWcdx
 {
 public:
-	Wcdx(LPCWSTR title, WNDPROC windowProc);
+	Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen);
 	~Wcdx();
 private:
 	Wcdx(const Wcdx&);

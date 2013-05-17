@@ -31,4 +31,10 @@ interface IWcdx : IUnknown
 	HRESULT UpdatePalette(UINT index, [in, ref] const WcdxColor* entry);
 	HRESULT UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, [in, size_is(height * pitch)] const byte* bits);
 	HRESULT Present();
+
+	HRESULT IsFullScreen();
+	HRESULT ConvertPointToScreen([in, out, ref] POINT* point);
+	HRESULT ConvertPointFromScreen([in, out, ref] POINT* point);
+	HRESULT ConvertRectToScreen([in, out, ref] RECT* rect);
+	HRESULT ConvertRectFromScreen([in, out, ref] RECT* rect);
 }

@@ -11,6 +11,10 @@
 class Wcdx : public IWcdx
 {
 public:
+	static const LONG ContentWidth = 320;
+	static const LONG ContentHeight = 200;
+
+public:
 	Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen);
 	~Wcdx();
 private:
@@ -24,11 +28,17 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override;
 
 	// IWcdx
-    HRESULT STDMETHODCALLTYPE SetVisible(BOOL visible) override;
+	HRESULT STDMETHODCALLTYPE SetVisible(BOOL visible) override;
 	HRESULT STDMETHODCALLTYPE SetPalette(const WcdxColor entries[256]) override;
 	HRESULT STDMETHODCALLTYPE UpdatePalette(UINT index, const WcdxColor* entry) override;
-    HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
-    HRESULT STDMETHODCALLTYPE Present() override;
+	HRESULT STDMETHODCALLTYPE UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits) override;
+	HRESULT STDMETHODCALLTYPE Present() override;
+
+	HRESULT STDMETHODCALLTYPE IsFullScreen() override;
+	HRESULT STDMETHODCALLTYPE ConvertPointToScreen(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertPointFromScreen(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectToScreen(RECT* rect) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectFromScreen(RECT* rect) override;
 
 private:
 	static ATOM FrameWindowClass();
@@ -37,6 +47,7 @@ private:
 	static LRESULT CALLBACK ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 	void OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight);
+	void OnActivate(WORD state, BOOL minimized, HWND other);
 	void OnNCDestroy();
 	bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
 	void OnRender();
@@ -63,7 +74,7 @@ private:
 #pragma warning(pop)
 
 	WcdxColor palette[256];
-	BYTE framebuffer[320 * 200];
+	BYTE framebuffer[ContentWidth * ContentHeight];
 
 	bool fullScreen;
 	bool dirty;

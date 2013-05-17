@@ -12,6 +12,9 @@ enum
 	WM_APP_RENDER = WM_APP
 };
 
+static void ConvertTo(LONG& x, LONG& y, const RECT& rect);
+static void ConvertFrom(LONG& x, LONG& y, const RECT& rect);
+
 WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen)
 {
 	try
@@ -44,7 +47,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 
 	D3DPRESENT_PARAMETERS params =
 	{
-		320, 200, D3DFMT_UNKNOWN, 1,
+		ContentWidth, ContentHeight, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
 		D3DSWAPEFFECT_DISCARD, contentWindow, TRUE,
 		FALSE, D3DFMT_UNKNOWN,
@@ -64,7 +67,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 		_com_raise_error(hr);
 	if (desc.Format != D3DFMT_X8R8G8B8)
 	{
-		if (FAILED(hr = device->CreateOffscreenPlainSurface(320, 200, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
+		if (FAILED(hr = device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
 			_com_raise_error(hr);
 	}
 
@@ -146,18 +149,18 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
 	{
 		max(rect.left, LONG(0)),
 		max(rect.top, LONG(0)),
-		min(rect.right, LONG(320)),
-		min(rect.bottom, LONG(200))
+		min(rect.right, LONG(ContentWidth)),
+		min(rect.bottom, LONG(ContentHeight))
 	};
 
 	const BYTE* src = static_cast<const BYTE*>(bits);
-	BYTE* dest = framebuffer + clipped.left + (320 * clipped.top);
+	BYTE* dest = framebuffer + clipped.left + (ContentWidth * clipped.top);
 	width = clipped.right - clipped.left;
 	for (height = clipped.bottom - clipped.top; height-- > 0; )
 	{
 		copy(src, src + width, dest);
 		src += pitch;
-		dest += 320;
+		dest += ContentWidth;
 	}
 	dirty = true;
 	return S_OK;
@@ -181,19 +184,19 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 
 		IDirect3DSurface9Ptr& buffer = surface != nullptr ? surface : backBuffer;
 		D3DLOCKED_RECT locked;
-		RECT bounds = { 0, 0, 320, 200 };
+		RECT bounds = { 0, 0, ContentWidth, ContentHeight };
 		if (FAILED(hr = buffer->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
 			return hr;
 		const BYTE* src = framebuffer;
 		WcdxColor* dest = static_cast<WcdxColor*>(locked.pBits);
-		for (int row = 0; row < 200; ++row)
+		for (int row = 0; row < ContentHeight; ++row)
 		{
-			transform(src, src + 320, dest, [&](BYTE index)
+			transform(src, src + ContentWidth, dest, [&](BYTE index)
 			{
 				return palette[index];
 			});
 
-			src += 320;
+			src += ContentWidth;
 			dest += locked.Pitch / sizeof(*dest);
 		}
 		hr = buffer->UnlockRect();
@@ -210,6 +213,65 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 	if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))
 		return hr;
 
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::IsFullScreen()
+{
+	return fullScreen ? S_OK : S_FALSE;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToScreen(POINT* point)
+{
+	if (point == nullptr)
+		return E_POINTER;
+
+	RECT viewRect;
+	if (!::GetWindowRect(contentWindow, &viewRect))
+		return HRESULT_FROM_WIN32(::GetLastError());
+
+	ConvertTo(point->x, point->y, viewRect);
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromScreen(POINT* point)
+{
+	if (point == nullptr)
+		return E_POINTER;
+
+	RECT viewRect;
+	if (!::GetWindowRect(contentWindow, &viewRect))
+		return HRESULT_FROM_WIN32(::GetLastError());
+
+	ConvertFrom(point->x, point->y, viewRect);
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToScreen(RECT* rect)
+{
+	if (rect == nullptr)
+		return E_POINTER;
+
+	RECT viewRect;
+	if (!::GetWindowRect(contentWindow, &viewRect))
+		return HRESULT_FROM_WIN32(::GetLastError());
+
+	ConvertTo(rect->left, rect->top, viewRect);
+	ConvertTo(rect->right, rect->bottom, viewRect);
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromScreen(RECT* rect)
+{
+	if (rect == nullptr)
+		return E_POINTER;
+
+	RECT viewRect;
+	if (!::GetWindowRect(contentWindow, &viewRect))
+		return HRESULT_FROM_WIN32(::GetLastError());
+
+	ConvertFrom(rect->left, rect->top, viewRect);
+	ConvertFrom(rect->right, rect->bottom, viewRect);
 	return S_OK;
 }
 
@@ -287,6 +349,10 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 			wcdx->OnSize(wParam, LOWORD(lParam), HIWORD(lParam));
 			return 0;
 
+		case WM_ACTIVATE:
+			wcdx->OnActivate(LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
+			return 0;
+
 		case WM_NCDESTROY:
 			wcdx->OnNCDestroy();
 			return 0;
@@ -332,6 +398,12 @@ void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
 	GetContentRect(contentRect);
 	::MoveWindow(contentWindow, contentRect.left, contentRect.top, contentRect.right - contentRect.left, contentRect.bottom - contentRect.top, FALSE);
 	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
+}
+
+void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
+{
+	if (state != WA_INACTIVE)
+		::SetFocus(contentWindow);
 }
 
 void Wcdx::OnNCDestroy()
@@ -473,4 +545,16 @@ void Wcdx::GetContentRect(RECT& contentRect)
 		contentRect.bottom = contentRect.top + height;
 		width = contentRect.right;
 	}
+}
+
+void ConvertTo(LONG& x, LONG& y, const RECT& rect)
+{
+	x = ((x * (rect.right - rect.left)) / Wcdx::ContentWidth) + rect.left;
+	y = ((y * (rect.bottom - rect.top)) / Wcdx::ContentHeight) + rect.top;
+}
+
+void ConvertFrom(LONG& x, LONG& y, const RECT& rect)
+{
+	x = ((x - rect.left) * Wcdx::ContentWidth) / (rect.right - rect.left);
+	y = ((y - rect.top) * Wcdx::ContentHeight) / (rect.bottom - rect.top);
 }

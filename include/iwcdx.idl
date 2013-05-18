@@ -33,8 +33,8 @@ interface IWcdx : IUnknown
 	HRESULT Present();
 
 	HRESULT IsFullScreen();
-	HRESULT ConvertPointToScreen([in, out, ref] POINT* point);
-	HRESULT ConvertPointFromScreen([in, out, ref] POINT* point);
-	HRESULT ConvertRectToScreen([in, out, ref] RECT* rect);
-	HRESULT ConvertRectFromScreen([in, out, ref] RECT* rect);
+	HRESULT ConvertPointToClient([in, out, ref] POINT* point);
+	HRESULT ConvertPointFromClient([in, out, ref] POINT* point);
+	HRESULT ConvertRectToClient([in, out, ref] RECT* rect);
+	HRESULT ConvertRectFromClient([in, out, ref] RECT* rect);
 }

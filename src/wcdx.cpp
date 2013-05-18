@@ -12,8 +12,8 @@ enum
 	WM_APP_RENDER = WM_APP
 };
 
-static void ConvertTo(LONG& x, LONG& y, const RECT& rect);
-static void ConvertFrom(LONG& x, LONG& y, const RECT& rect);
+static void ConvertTo(LONG& x, LONG& y, const SIZE& size);
+static void ConvertFrom(LONG& x, LONG& y, const SIZE& size);
 
 WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen)
 {
@@ -221,57 +221,61 @@ HRESULT STDMETHODCALLTYPE Wcdx::IsFullScreen()
 	return fullScreen ? S_OK : S_FALSE;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToScreen(POINT* point)
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToClient(POINT* point)
 {
 	if (point == nullptr)
 		return E_POINTER;
 
 	RECT viewRect;
-	if (!::GetWindowRect(contentWindow, &viewRect))
+	if (!::GetClientRect(contentWindow, &viewRect))
 		return HRESULT_FROM_WIN32(::GetLastError());
 
-	ConvertTo(point->x, point->y, viewRect);
+	SIZE size = { viewRect.right, viewRect.bottom };
+	ConvertTo(point->x, point->y, size);
 	return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromScreen(POINT* point)
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromClient(POINT* point)
 {
 	if (point == nullptr)
 		return E_POINTER;
 
 	RECT viewRect;
-	if (!::GetWindowRect(contentWindow, &viewRect))
+	if (!::GetClientRect(contentWindow, &viewRect))
 		return HRESULT_FROM_WIN32(::GetLastError());
 
-	ConvertFrom(point->x, point->y, viewRect);
+	SIZE size = { viewRect.right, viewRect.bottom };
+	ConvertFrom(point->x, point->y, size);
 	return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToScreen(RECT* rect)
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToClient(RECT* rect)
 {
 	if (rect == nullptr)
 		return E_POINTER;
 
 	RECT viewRect;
-	if (!::GetWindowRect(contentWindow, &viewRect))
+	if (!::GetClientRect(contentWindow, &viewRect))
 		return HRESULT_FROM_WIN32(::GetLastError());
 
-	ConvertTo(rect->left, rect->top, viewRect);
-	ConvertTo(rect->right, rect->bottom, viewRect);
+	SIZE size = { viewRect.right, viewRect.bottom };
+	ConvertTo(rect->left, rect->top, size);
+	ConvertTo(rect->right, rect->bottom, size);
 	return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromScreen(RECT* rect)
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromClient(RECT* rect)
 {
 	if (rect == nullptr)
 		return E_POINTER;
 
 	RECT viewRect;
-	if (!::GetWindowRect(contentWindow, &viewRect))
+	if (!::GetClientRect(contentWindow, &viewRect))
 		return HRESULT_FROM_WIN32(::GetLastError());
 
-	ConvertFrom(rect->left, rect->top, viewRect);
-	ConvertFrom(rect->right, rect->bottom, viewRect);
+	SIZE size = { viewRect.right, viewRect.bottom };
+	ConvertFrom(rect->left, rect->top, size);
+	ConvertFrom(rect->right, rect->bottom, size);
 	return S_OK;
 }
 
@@ -547,14 +551,14 @@ void Wcdx::GetContentRect(RECT& contentRect)
 	}
 }
 
-void ConvertTo(LONG& x, LONG& y, const RECT& rect)
+void ConvertTo(LONG& x, LONG& y, const SIZE& size)
 {
-	x = ((x * (rect.right - rect.left)) / Wcdx::ContentWidth) + rect.left;
-	y = ((y * (rect.bottom - rect.top)) / Wcdx::ContentHeight) + rect.top;
+	x = ((x * size.cx) / Wcdx::ContentWidth);
+	y = ((y * size.cy) / Wcdx::ContentHeight);
 }
 
-void ConvertFrom(LONG& x, LONG& y, const RECT& rect)
+void ConvertFrom(LONG& x, LONG& y, const SIZE& size)
 {
-	x = ((x - rect.left) * Wcdx::ContentWidth) / (rect.right - rect.left);
-	y = ((y - rect.top) * Wcdx::ContentHeight) / (rect.bottom - rect.top);
+	x = (x * Wcdx::ContentWidth) / size.cx;
+	y = (y * Wcdx::ContentHeight) / size.cy;
 }

@@ -35,10 +35,10 @@ public:
 	HRESULT STDMETHODCALLTYPE Present() override;
 
 	HRESULT STDMETHODCALLTYPE IsFullScreen() override;
-	HRESULT STDMETHODCALLTYPE ConvertPointToScreen(POINT* point) override;
-    HRESULT STDMETHODCALLTYPE ConvertPointFromScreen(POINT* point) override;
-    HRESULT STDMETHODCALLTYPE ConvertRectToScreen(RECT* rect) override;
-    HRESULT STDMETHODCALLTYPE ConvertRectFromScreen(RECT* rect) override;
+	HRESULT STDMETHODCALLTYPE ConvertPointToClient(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertPointFromClient(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectToClient(RECT* rect) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectFromClient(RECT* rect) override;
 
 private:
 	static ATOM FrameWindowClass();

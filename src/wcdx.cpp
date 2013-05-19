@@ -27,7 +27,7 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
 	}
 }
 
-Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false)
+Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false), mouseOver(false)
 {
 	frameWindow = ::CreateWindowEx(frameExStyle,
 		reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
@@ -390,6 +390,21 @@ LRESULT CALLBACK Wcdx::ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam,
 	}
 	else
 	{
+		switch (message)
+		{
+		case WM_MOUSEMOVE:
+			static_cast<Wcdx*>(wcdx)->OnContentMouseMove(wParam, LOWORD(lParam), HIWORD(lParam));
+			break;
+
+		case WM_MOUSELEAVE:
+			static_cast<Wcdx*>(wcdx)->OnContentMouseLeave();
+			break;
+
+		case WM_SYSKEYDOWN:
+			if (static_cast<Wcdx*>(wcdx)->OnSysKeyDown(wParam, LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam))))
+				return 0;
+			break;
+		}
 		return static_cast<Wcdx*>(wcdx)->clientWindowProc(hwnd, message, wParam, lParam);
 	}
 
@@ -430,6 +445,28 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 void Wcdx::OnRender()
 {
 	device->Present(nullptr, nullptr, nullptr, nullptr);
+}
+
+void Wcdx::OnContentMouseMove(DWORD keyState, SHORT x, SHORT y)
+{
+	if (!mouseOver)
+	{
+		mouseOver = true;
+		TRACKMOUSEEVENT tme = 
+		{
+			sizeof(TRACKMOUSEEVENT),
+			TME_LEAVE,
+			contentWindow
+		};
+		::TrackMouseEvent(&tme);
+		::ShowCursor(FALSE);
+	}
+}
+
+void Wcdx::OnContentMouseLeave()
+{
+	mouseOver = false;
+	::ShowCursor(TRUE);
 }
 
 void Wcdx::SetFullScreen(bool enabled)

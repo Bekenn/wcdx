@@ -52,6 +52,9 @@ private:
 	bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
 	void OnRender();
 
+	void OnContentMouseMove(DWORD keyState, SHORT x, SHORT y);
+	void OnContentMouseLeave();
+
 	void SetFullScreen(bool enabled);
 	void GetContentRect(RECT& contentRect);
 
@@ -78,6 +81,7 @@ private:
 
 	bool fullScreen;
 	bool dirty;
+	bool mouseOver;
 };
 
 #endif

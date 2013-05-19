@@ -436,6 +436,14 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 	if ((vkey == VK_RETURN) && ((flags & 0x60) == 0x20))
 	{
 		SetFullScreen(!fullScreen);
+		if (fullScreen)
+		{
+			RECT contentRect;
+			::GetWindowRect(contentWindow, &contentRect);
+			::ClipCursor(&contentRect);
+		}
+		else
+			::ClipCursor(nullptr);
 		return true;
 	}
 

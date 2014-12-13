@@ -4,7 +4,6 @@
 #include <iwcdx.h>
 
 #include <d3d9.h>
-#include <DxErr.h>
 #include <Shlwapi.h>
 #include <comdef.h>
 
@@ -14,9 +13,13 @@
 
 #include <assert.h>
 
+// GDI+ headers use unqualified min and max (probably expecting the Windows macros)
 using std::min;
 using std::max;
+#pragma warning(push)
+#pragma warning(disable: 4458) // VS2015 Preview warns about hidden names in GDI+ headers
 #include <gdiplus.h>
+#pragma warning(pop)
 
 
 using namespace Gdiplus;
@@ -79,8 +82,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 	}
 	catch (const _com_error& error)
 	{
-		LPCWSTR errorMessage = HRESULT_FACILITY(error.Error()) == _FACD3D ? DXGetErrorDescription(error.Error()) : error.ErrorMessage();
-		::MessageBox(nullptr, errorMessage, L"COM Error", MB_ICONERROR | MB_OK);
+		::MessageBox(nullptr, error.ErrorMessage(), L"COM Error", MB_ICONERROR | MB_OK);
 	}
 
 	return EXIT_FAILURE;
@@ -117,7 +119,7 @@ void ShowImage(IWcdx* wcdx, Bitmap& image)
 	image.LockBits(&imageRect, 0, image.GetPixelFormat(), &bits);
 	at_scope_exit([&]{ image.UnlockBits(&bits); });
 
-	RECT updateRect = { 0, 0, image.GetWidth(), image.GetHeight() };
+	RECT updateRect = { 0, 0, LONG(image.GetWidth()), LONG(image.GetHeight()) };
 	wcdx->UpdateFrame(updateRect.left, updateRect.top, updateRect.right - updateRect.left, updateRect.bottom - updateRect.top, bits.Stride, reinterpret_cast<byte*>(bits.Scan0));
 }
 

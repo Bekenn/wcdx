@@ -144,7 +144,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdatePalette(UINT index, const WcdxColor* entry
 
 HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT height, UINT pitch, const byte* bits)
 {
-	RECT rect = { x, y, x + width, y + height };
+	RECT rect = { x, y, LONG(x + width), LONG(y + height) };
 	RECT clipped =
 	{
 		max(rect.left, LONG(0)),

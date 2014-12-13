@@ -1,7 +1,7 @@
 
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.20617.1 PREVIEW
+# Visual Studio 14
+VisualStudioVersion = 14.0.22310.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wcdx", "wcdx.vcxproj", "{9EC19D93-A821-411F-ABFB-C60B657D5839}"
 EndProject
@@ -19,6 +19,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "iolib", "..\iolib\iolib.vcxproj", "{B562D710-5EA2-4038-BEAB-09E03534C813}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "windows_error", "..\windows\windows_error\windows_error.vcxproj", "{FD3721C7-27C7-4EB3-997C-B0AD6263675B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "stdrange", "..\stdrange\stdrange.vcxproj", "{3E45411C-7113-40A7-AEDC-744F712FBD17}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -46,6 +48,10 @@ Global
 		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Debug|Win32.Build.0 = Debug|Win32
 		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Release|Win32.ActiveCfg = Release|Win32
 		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Release|Win32.Build.0 = Release|Win32
+		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Debug|Win32.ActiveCfg = Debug|Win32
+		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Debug|Win32.Build.0 = Debug|Win32
+		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Release|Win32.ActiveCfg = Release|Win32
+		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

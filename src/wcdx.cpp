@@ -74,7 +74,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 	WcdxColor defColor = { 0, 0, 0, 0xFF };
 	fill(begin(palette), end(palette), defColor);
 
-	SetFullScreen(fullScreen);
+	SetFullScreen(IsDebuggerPresent() ? false : fullScreen);
 }
 
 Wcdx::~Wcdx()

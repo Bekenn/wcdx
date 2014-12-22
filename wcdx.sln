@@ -22,6 +22,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "windows_error", "..\windows
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "stdrange", "..\stdrange\stdrange.vcxproj", "{3E45411C-7113-40A7-AEDC-744F712FBD17}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "patchmusic", "patchmusic\patchmusic.vcxproj", "{9C561146-1B68-42F6-9CE5-B16FAC0994A6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -52,6 +54,10 @@ Global
 		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Debug|Win32.Build.0 = Debug|Win32
 		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Release|Win32.ActiveCfg = Release|Win32
 		{3E45411C-7113-40A7-AEDC-744F712FBD17}.Release|Win32.Build.0 = Release|Win32
+		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Debug|Win32.Build.0 = Debug|Win32
+		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Release|Win32.ActiveCfg = Release|Win32
+		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

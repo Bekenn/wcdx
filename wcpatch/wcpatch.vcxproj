@@ -52,7 +52,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>common.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\..\iolib\include;..\..\stdrange\include;..\..\windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -68,7 +68,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_SCL_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeaderFile>common.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\..\iolib\include;..\..\stdrange\include;..\..\windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\windows\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -80,6 +80,11 @@
   <ItemGroup>
     <ClInclude Include="res\resources.h" />
     <ClInclude Include="src\common.h" />
+    <ClInclude Include="src\iolib\error.h" />
+    <ClInclude Include="src\iolib\file_stream.h" />
+    <ClInclude Include="src\iolib\stream.h" />
+    <ClInclude Include="src\iolib\string_view.h" />
+    <ClInclude Include="src\iolib\types.h" />
     <ClInclude Include="src\resource_stream.h" />
     <ClInclude Include="src\Win32\platform.h" />
   </ItemGroup>
@@ -87,6 +92,18 @@
     <ClCompile Include="src\common.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\iolib\file_stream.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\iolib\stream.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="src\iolib\string_view.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\Win32\platform.cpp">
@@ -102,9 +119,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\iolib\iolib.vcxproj">
-      <Project>{b562d710-5ea2-4038-beab-09e03534c813}</Project>
-    </ProjectReference>
     <ProjectReference Include="..\..\windows\windows_error\windows_error.vcxproj">
       <Project>{fd3721c7-27c7-4eb3-997c-b0ad6263675b}</Project>
     </ProjectReference>

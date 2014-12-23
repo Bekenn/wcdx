@@ -2,8 +2,8 @@
 #include "resource_stream.h"
 #include "../res/resources.h"
 
-#include <iolib/file_stream.h>
-#include <iolib/string_view.h>
+#include "iolib/file_stream.h"
+#include "iolib/string_view.h"
 
 #include <algorithm>
 #include <iostream>

@@ -6,8 +6,6 @@
 #include <utility>
 
 
-#define IOLIB_USE_BOOST_RANGE 0
-
 #define lengthof(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #define at_scope_exit(cb) auto CONCAT(scope_exit_, __COUNTER__) = make_scope_guard(cb);

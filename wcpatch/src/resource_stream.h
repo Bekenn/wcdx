@@ -2,7 +2,7 @@
 #define RESOURCE_STREAM_INCLUDED
 #pragma once
 
-#include <iolib/stream.h>
+#include "iolib/stream.h"
 #include <memory>
 #include <stdint.h>
 

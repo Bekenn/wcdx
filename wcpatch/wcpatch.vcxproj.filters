@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\iolib">
+      <UniqueIdentifier>{843f6a9c-393c-471e-a006-0a8546770a47}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\iolib">
+      <UniqueIdentifier>{b18c05c6-4fd5-42e5-bc98-2ae9fac8eb81}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
@@ -27,6 +33,21 @@
     <ClInclude Include="res\resources.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\iolib\error.h">
+      <Filter>Header Files\iolib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\iolib\file_stream.h">
+      <Filter>Header Files\iolib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\iolib\stream.h">
+      <Filter>Header Files\iolib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\iolib\string_view.h">
+      <Filter>Header Files\iolib</Filter>
+    </ClInclude>
+    <ClInclude Include="src\iolib\types.h">
+      <Filter>Header Files\iolib</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\common.cpp">
@@ -40,6 +61,15 @@
     </ClCompile>
     <ClCompile Include="src\Win32\platform.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\iolib\file_stream.cpp">
+      <Filter>Source Files\iolib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\iolib\stream.cpp">
+      <Filter>Source Files\iolib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\iolib\string_view.cpp">
+      <Filter>Source Files\iolib</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -16,10 +16,9 @@ public:
 
 public:
 	Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen);
+	Wcdx(const Wcdx&) = delete;
+	Wcdx& operator = (const Wcdx&) = delete;
 	~Wcdx();
-private:
-	Wcdx(const Wcdx&);
-	Wcdx& operator = (const Wcdx&);
 
 public:
 	// IUnknown

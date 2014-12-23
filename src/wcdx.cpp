@@ -37,6 +37,10 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 
 	::GetWindowRect(frameWindow, &frameRect);
 
+	// Force 4:3 aspect ratio.
+	OnSizing(WMSZ_TOP, &frameRect);
+	::MoveWindow(frameWindow, frameRect.left, frameRect.top, frameRect.right - frameRect.left, frameRect.bottom - frameRect.top, FALSE);
+
 	RECT contentRect;
 	GetContentRect(contentRect);
 	contentWindow = ::CreateWindowEx(0, reinterpret_cast<LPCWSTR>(ContentWindowClass()), nullptr, WS_VISIBLE | WS_CHILD,
@@ -366,6 +370,10 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 				return 0;
 			break;
 
+		case WM_SIZING:
+			wcdx->OnSizing(wParam, reinterpret_cast<RECT*>(lParam));
+			return TRUE;
+
 		case WM_APP_RENDER:
 			wcdx->OnRender();
 			break;
@@ -448,6 +456,84 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 	}
 
 	return false;
+}
+
+void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
+{
+	RECT client = { 0, 0, 0, 0 };
+	::AdjustWindowRectEx(&client, frameStyle, FALSE, frameExStyle);
+	client.left = dragRect->left - client.left;
+	client.top = dragRect->top - client.top;
+	client.right = dragRect->right - client.right;
+	client.bottom = dragRect->bottom - client.bottom;
+
+	auto width = client.right - client.left;
+	auto height = client.bottom - client.top;
+
+	bool adjustWidth;
+	switch (windowEdge)
+	{
+	case WMSZ_LEFT:
+	case WMSZ_RIGHT:
+		adjustWidth = false;
+		break;
+
+	case WMSZ_TOP:
+	case WMSZ_BOTTOM:
+		adjustWidth = true;
+		break;
+
+	default:
+		adjustWidth = height > (3 * width) / 4;
+		break;
+	}
+
+	if (adjustWidth)
+	{
+		width = (4 * height) / 3;
+		auto delta = width - (client.right - client.left);
+		switch (windowEdge)
+		{
+		case WMSZ_TOP:
+		case WMSZ_BOTTOM:
+			dragRect->left -= delta / 2;
+			dragRect->right += delta - (delta / 2);
+			break;
+
+		case WMSZ_TOPLEFT:
+		case WMSZ_BOTTOMLEFT:
+			dragRect->left -= delta;
+			break;
+
+		case WMSZ_TOPRIGHT:
+		case WMSZ_BOTTOMRIGHT:
+			dragRect->right += delta;
+			break;
+		}
+	}
+	else
+	{
+		height = (3 * width) / 4;
+		auto delta = height - (client.bottom - client.top);
+		switch (windowEdge)
+		{
+		case WMSZ_LEFT:
+		case WMSZ_RIGHT:
+			dragRect->top -= delta / 2;
+			dragRect->bottom += delta - (delta / 2);
+			break;
+
+		case WMSZ_TOPLEFT:
+		case WMSZ_TOPRIGHT:
+			dragRect->top -= delta;
+			break;
+
+		case WMSZ_BOTTOMLEFT:
+		case WMSZ_BOTTOMRIGHT:
+			dragRect->bottom += delta;
+			break;
+		}
+	}
 }
 
 void Wcdx::OnRender()

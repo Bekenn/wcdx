@@ -50,6 +50,7 @@ private:
 	void OnActivate(WORD state, BOOL minimized, HWND other);
 	void OnNCDestroy();
 	bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
+	void OnSizing(DWORD windowEdge, RECT* dragRect);
 	void OnRender();
 
 	void OnContentMouseMove(DWORD keyState, SHORT x, SHORT y);

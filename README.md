@@ -23,8 +23,24 @@ Here are the main features:
 The bad news:
 
 * I've so far only done this for Wing Commander 1 itself.  I haven't yet touched WC2, WC3, or any of the mission packs.  It's a lot of work, but it's not impossible that I'll get around to the others.
-* The patch only works for the version of Wing Commander 1 distributed with the Secret Missions pack (available here).  If you haven't installed the Secret Missions pack, the patch will do you no good.
+* The patch only works for the version of Wing Commander 1 distributed with the Secret Missions pack (available [here][1]).  If you haven't installed the Secret Missions pack, the patch will do you no good.
 
 The surprisingly awesome news:
 
 * Because it's a data patch, the annoying music bug is fixed throughout both Wing Commander 1 and the Secret Missions pack.  (I vaguely recall that it wasn't an issue in WC2.)
+
+How to use it:
+
+1.  Install the game.  You can use the installer from the CD if you wish, but my preferred method is to simply take the WC1 folder and copy it somewhere.  If you use the installer, be sure to go back and copy the streams directory afterward.  This will allow you to run the game without the CD, and (more importantly) is required in order for the music patch to work.
+2.  Install the [Secret Missions][1] add-on pack.  Once again, you can use the included installer, or you can simply copy the files over.  If you choose to do it manually, note that every file that isn't an executable (.exe) belongs in the gamedat directory.
+3.  Copy wcdx.dll, wcpatch.exe, and patchmusic.exe into the directory containing Wing1.exe.
+4.  Open a command prompt and run this command: wcpatch Wing1.exe Wing1_wcdx.exe
+5.  Run this other command: patchmusic streams\mission.str
+6.  Try it out!  Double-click on Wing1_wcdx to start the game.  If everything works the way you expect it to, you can delete your old Wing1.exe and rename Wing1_wcdx back to Wing1.
+
+Acknowledgements
+----------------
+
+Wing Commander and Wing Commander Kilrathi Saga are products of the fine folks at [EA](http://www.ea.com/).  Just about all of the games from the series _except for Kilrathi Saga_ are currently cheaply available at [GOG](http://www.gog.com/) and via EA's [Origin](http://www.origin.com/) store.  If you don't have the game and would like to try Wing Commander, please visit one of those stores for an experience that's only slightly less awesome than Kilrathi Saga.
+
+[1]: http://www.wcnews.com/wcpedia/Category:Downloads#Wing_Commander

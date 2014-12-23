@@ -1,6 +1,6 @@
 #include "platform.h"
 
-#include <windows_error.h>
+#include "windows_error.h"
 
 #include <locale>	// for wstring_convert
 #include <new>	// for bad_alloc

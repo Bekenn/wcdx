@@ -2,8 +2,7 @@
 
 #include "../resource_stream.h"
 
-#include <windows_error.h>
-#include <windows_text.h>
+#include "windows_error.h"
 
 #include <map>
 
@@ -21,14 +20,12 @@ struct resource
 struct resource_stream::impl
 {
 	impl(uint32_t id);
+	impl(const impl&) = delete;
+	impl& operator = (const impl&) = delete;
 	~impl();
 
 	uint32_t id;
 	shared_ptr<resource> res;
-
-private:
-	impl(const impl&);
-	impl& operator = (const impl&);
 
 private:
 	static map<uint32_t, weak_ptr<resource>> loaded_resources;

@@ -19,15 +19,15 @@
     <Filter Include="Source Files\iolib">
       <UniqueIdentifier>{b18c05c6-4fd5-42e5-bc98-2ae9fac8eb81}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Win32">
+      <UniqueIdentifier>{2668dbaa-e6a1-4a53-8616-e05371c3430c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Win32">
+      <UniqueIdentifier>{472ffddd-e45b-4e0e-ba5b-eec159ed77fe}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\common.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\resource_stream.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Win32\platform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="res\resources.h">
@@ -48,18 +48,21 @@
     <ClInclude Include="src\iolib\types.h">
       <Filter>Header Files\iolib</Filter>
     </ClInclude>
+    <ClInclude Include="src\Win32\platform.h">
+      <Filter>Header Files\Win32</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resource_stream.h">
+      <Filter>Header Files\Win32</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Win32\windows_error.h">
+      <Filter>Header Files\Win32</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Win32\resource_stream.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\Win32\platform.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\iolib\file_stream.cpp">
@@ -70,6 +73,15 @@
     </ClCompile>
     <ClCompile Include="src\iolib\string_view.cpp">
       <Filter>Source Files\iolib</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Win32\windows_error.cpp">
+      <Filter>Source Files\Win32</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Win32\resource_stream.cpp">
+      <Filter>Source Files\Win32</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Win32\platform.cpp">
+      <Filter>Source Files\Win32</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -11,11 +11,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test", "test\test.vcxproj",
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wcpatch", "wcpatch\wcpatch.vcxproj", "{691DE91A-21EC-4896-BE32-9A695F53DBEE}"
-	ProjectSection(ProjectDependencies) = postProject
-		{FD3721C7-27C7-4EB3-997C-B0AD6263675B} = {FD3721C7-27C7-4EB3-997C-B0AD6263675B}
-	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "windows_error", "..\windows\windows_error\windows_error.vcxproj", "{FD3721C7-27C7-4EB3-997C-B0AD6263675B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "patchmusic", "patchmusic\patchmusic.vcxproj", "{9C561146-1B68-42F6-9CE5-B16FAC0994A6}"
 EndProject
@@ -37,10 +32,6 @@ Global
 		{691DE91A-21EC-4896-BE32-9A695F53DBEE}.Debug|Win32.Build.0 = Debug|Win32
 		{691DE91A-21EC-4896-BE32-9A695F53DBEE}.Release|Win32.ActiveCfg = Release|Win32
 		{691DE91A-21EC-4896-BE32-9A695F53DBEE}.Release|Win32.Build.0 = Release|Win32
-		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Debug|Win32.ActiveCfg = Debug|Win32
-		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Debug|Win32.Build.0 = Debug|Win32
-		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Release|Win32.ActiveCfg = Release|Win32
-		{FD3721C7-27C7-4EB3-997C-B0AD6263675B}.Release|Win32.Build.0 = Release|Win32
 		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Debug|Win32.ActiveCfg = Debug|Win32
 		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Debug|Win32.Build.0 = Debug|Win32
 		{9C561146-1B68-42F6-9CE5-B16FAC0994A6}.Release|Win32.ActiveCfg = Release|Win32

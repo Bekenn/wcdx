@@ -120,12 +120,17 @@ bool patch_imports(seekable_stream& file_data)
 	uint16_t section_count;
 	file_data.read(section_count);
 
-	// Skip to optional header
+	// Read optional header size
 	file_data.seek(12);
 	uint16_t header_size;
 	file_data.read(header_size);
 
-	file_data.seek(2);
+	// Set the IMAGE_FILE_RELOCS_STRIPPED flag
+	uint16_t flags;
+	file_data.read(flags);
+	file_data.seek(-2);
+	file_data.write(uint16_t(flags | 1));
+
 	uint16_t pe_type_signature;
 	file_data.read(pe_type_signature);
 	if (pe_type_signature != OptionalHeader_PE32Signature && pe_type_signature != OptionalHeader_PE32PlusSignature)
@@ -134,8 +139,29 @@ bool patch_imports(seekable_stream& file_data)
 		return false;
 	}
 
-	// Skip to the section tables.
-	file_data.seek(header_size - 2);
+	// Set the minimum OS fields to Windows XP
+	file_data.seek(38);
+	file_data.write(uint16_t(5));
+	file_data.write(uint16_t(1));
+	file_data.seek(4);
+	file_data.write(uint16_t(5));
+	file_data.write(uint16_t(1));
+
+	// Skip to the data directories and clear out the relocation table entry.
+	file_data.seek(40);
+	uint32_t count;
+	file_data.read(count);
+	if (count >= 6)
+	{
+		file_data.seek(5 * 8);
+		file_data.write(uint32_t(0));	// relocation data offset
+		file_data.write(uint32_t(0));	// relocation data size
+
+		// Skip to the section tables.
+		file_data.seek(header_size - 96 - (6 * 8));	// seek past the optional header
+	}
+	else
+		file_data.seek(header_size - 96);	// Skip to the section tables.
 
 	section_header_t section_header;
 	for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index)
@@ -144,9 +170,6 @@ bool patch_imports(seekable_stream& file_data)
 		if (strcmp(section_header.name, ".idata") == 0)
 			break;
 	}
-
-	// Save current position.
-	auto position = file_data.position();
 
 	// Skip to the import tables.
 	file_data.seek(section_header.raw_data_offset, file::seek_from::beginning);

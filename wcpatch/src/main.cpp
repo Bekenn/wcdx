@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 
 using namespace std;
@@ -42,7 +43,7 @@ struct import_entry_t
 	uint32_t import_table_virtual_address;
 };
 
-static bool patch_imports(seekable_stream& file_data);
+static bool patch_image(seekable_stream& file_data);
 static bool apply_dif(seekable_stream& file_data);
 
 static string read_line(seekable_input_stream& is);
@@ -59,10 +60,34 @@ int wmain(int argc, wchar_t* argv[])
 	at_scope_exit([&]{ system("pause"); });
 #endif
 
-	if (argc != 3)
+	const wchar_t* input_path = nullptr;
+	const wchar_t* output_path = nullptr;
+	bool headers_only = false;
+
+	for (const wchar_t* const* arg = argv + 1; *arg != nullptr; ++arg)
 	{
-		wcout << L"Usage:\n\t" << argv[0] << L" <input_path> <output_path>" << endl;
-		return EXIT_FAILURE;
+		switch (**arg)
+		{
+		case L'\0':
+			continue;
+
+		case L'-':
+		case L'/':
+			if (wcscmp(*arg + 1, L"headers-only") == 0)
+				headers_only = true;
+			break;
+
+		default:
+			if (input_path == nullptr)
+				input_path = *arg;
+			else if (output_path == nullptr)
+				output_path = *arg;
+			else
+			{
+				wcout << L"Usage:\n\t" << argv[0] << L" <input_path> <output_path>" << endl;
+				return EXIT_FAILURE;
+			}
+		}
 	}
 
 	try
@@ -70,7 +95,7 @@ int wmain(int argc, wchar_t* argv[])
 		// Read the input file into an in-memory buffer.
 		vector<uint8_t> file_buffer;
 		{
-			file input_file(argv[1], file::mode::open | file::mode::read);
+			file input_file(input_path, file::mode::open | file::mode::read);
 			input_file.seek(0, file::seek_from::end);
 			size_t size = size_t(input_file.position());
 			file_buffer.resize(size);
@@ -81,13 +106,13 @@ int wmain(int argc, wchar_t* argv[])
 		// iolib streams are very good for reading and writing heterogeneous data.
 		memory_stream file_data(file_buffer.data(), file_buffer.size());
 
-		if (!patch_imports(file_data))
+		if (!patch_image(file_data))
 			return EXIT_FAILURE;
 
-		if (!apply_dif(file_data))
+		if (!headers_only && !apply_dif(file_data))
 			return EXIT_FAILURE;
 
-		file output_file(argv[2], file::mode::open_or_create | file::mode::write);
+		file output_file(output_path, file::mode::open_or_create | file::mode::write);
 		output_file.write(file_buffer.data(), file_buffer.size());
 		return EXIT_SUCCESS;
 	}
@@ -98,7 +123,7 @@ int wmain(int argc, wchar_t* argv[])
 	return EXIT_FAILURE;
 }
 
-bool patch_imports(seekable_stream& file_data)
+bool patch_image(seekable_stream& file_data)
 {
 	// Read offset of PE header
 	file_data.seek(0x3C);

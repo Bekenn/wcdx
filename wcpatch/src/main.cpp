@@ -116,6 +116,10 @@ int wmain(int argc, wchar_t* argv[])
 		output_file.write(file_buffer.data(), file_buffer.size());
 		return EXIT_SUCCESS;
 	}
+	catch (const exception& e)
+	{
+		cerr << e.what() << endl;
+	}
 	catch (...)
 	{
 	}
@@ -172,8 +176,15 @@ bool patch_image(seekable_stream& file_data)
 	file_data.write(uint16_t(5));
 	file_data.write(uint16_t(1));
 
+	// Set the NX-compatible bit
+	file_data.seek(18);
+	file_data.read(flags);
+	flags |= 0x0100;
+	file_data.seek(-2);
+	file_data.write(flags);
+
 	// Skip to the data directories and clear out the relocation table entry.
-	file_data.seek(40);
+	file_data.seek(20);
 	uint32_t count;
 	file_data.read(count);
 	if (count >= 6)

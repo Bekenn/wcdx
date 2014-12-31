@@ -15,12 +15,11 @@ class scope_guard
 {
 public:
 	scope_guard(Callback cb) : cb(cb), valid(true) { }
+	scope_guard(const scope_guard& other) = delete;
+	scope_guard& operator = (const scope_guard& other) = delete;
 	scope_guard(scope_guard&& other) : cb(std::move(other.cb)), valid(std::move(other.valid)) { other.valid = false; }
 	scope_guard& operator = (scope_guard&& other) { cb = std::move(other.cb); valid = std::move(other.valid); other.valid = false; return *this; }
 	~scope_guard() { if (valid) cb(); }
-private:
-	scope_guard(const scope_guard& other);
-	scope_guard& operator = (const scope_guard& other);
 
 private:
 	Callback cb;

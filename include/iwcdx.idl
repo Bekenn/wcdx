@@ -37,4 +37,12 @@ interface IWcdx : IUnknown
 	HRESULT ConvertPointFromClient([in, out, ref] POINT* point);
 	HRESULT ConvertRectToClient([in, out, ref] RECT* rect);
 	HRESULT ConvertRectFromClient([in, out, ref] RECT* rect);
+
+	HRESULT SavedGameOpen([in, string] const wchar_t* subdir, [in, string] const wchar_t* filename, int oflag, int pmode, [out, ref] int* filedesc);
+	HRESULT OpenFile([in, string] const char* filename, int oflag, int pmode, [out, ref] int* filedesc);
+	HRESULT CloseFile(int filedesc);
+	HRESULT WriteFile(int filedesc, long offset, unsigned size, [in, size_is(size)] const void* data);
+	HRESULT ReadFile(int filedesc, long offset, unsigned size, [out, size_is(size)] void* data);
+	HRESULT SeekFile(int filedesc, long offset, int method, [out, ref] long* position);
+	HRESULT FileLength(int filedesc, [out, ref] long* length);
 }

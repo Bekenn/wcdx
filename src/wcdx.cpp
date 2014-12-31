@@ -2,7 +2,14 @@
 #include "wcdx.h"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
+
+#include <io.h>
+#include <fcntl.h>
+
+#include <Shlobj.h>
+#include <strsafe.h>
 
 
 using namespace std;
@@ -14,6 +21,10 @@ enum
 
 static void ConvertTo(LONG& x, LONG& y, const SIZE& size);
 static void ConvertFrom(LONG& x, LONG& y, const SIZE& size);
+static HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path);
+static HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
+
+static bool CreateDirectoryRecursive(LPWSTR pathName);
 
 WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen)
 {
@@ -280,6 +291,135 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromClient(RECT* rect)
 	SIZE size = { viewRect.right, viewRect.bottom };
 	ConvertFrom(rect->left, rect->top, size);
 	ConvertFrom(rect->right, rect->bottom, size);
+	return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::SavedGameOpen(const wchar_t* subdir, const wchar_t* filename, int oflag, int pmode, int* filedesc)
+{
+	if (subdir == nullptr || filename == nullptr || filedesc == nullptr)
+		return E_POINTER;
+
+	typedef HRESULT (* GamePathFn)(const wchar_t* subdir, wchar_t* path);
+	GamePathFn pathFuncs[] =
+	{
+		GetSavedGamePath,
+		GetLocalAppDataPath,
+	};
+
+	wchar_t path[_MAX_PATH];
+	for (auto func : pathFuncs)
+	{
+		auto hr = func(subdir, path);
+		if (SUCCEEDED(hr))
+		{
+			if ((oflag & _O_CREAT) != 0)
+			{
+				if (!CreateDirectoryRecursive(path))
+					continue;
+			}
+
+			wchar_t* pathEnd;
+			size_t remaining;
+			if (FAILED(hr = StringCchCatEx(path, _MAX_PATH, L"\\", &pathEnd, &remaining, 0)))
+				return hr;
+			if (FAILED(hr = StringCchCopy(pathEnd, remaining, filename)))
+				return hr;
+
+			auto error = _wsopen_s(filedesc, path, oflag, _SH_DENYNO, pmode);
+			if (*filedesc != -1)
+				return S_OK;
+
+			if (error != ENOENT)
+				return E_FAIL;
+		}
+	}
+
+	if ((oflag & _O_CREAT) == 0)
+	{
+		// If the savegame file exists, try to move or copy it into a better location.
+		for (auto func : pathFuncs)
+		{
+			auto hr = func(subdir, path);
+			if (SUCCEEDED(hr))
+			{
+				if (!CreateDirectoryRecursive(path))
+					continue;
+
+				wchar_t* pathEnd;
+				size_t remaining;
+				if (FAILED(StringCchCatEx(path, _MAX_PATH, L"\\", &pathEnd, &remaining, 0)))
+					continue;
+				if (FAILED(StringCchCopy(pathEnd, remaining, filename)))
+					continue;
+
+				if (::MoveFileEx(filename, path, MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING)
+					|| ::CopyFile(filename, path, FALSE))
+				{
+					filename = path;
+					break;
+				}
+			}
+		}
+	}
+
+	_wsopen_s(filedesc, filename, oflag, _SH_DENYNO, pmode);
+	if (*filedesc != -1)
+		return S_OK;
+
+	*filedesc = -1;
+	return E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::OpenFile(const unsigned char* filename, int oflag, int pmode, int* filedesc)
+{
+	if (filename == nullptr || filedesc == nullptr)
+		return E_POINTER;
+
+	return _sopen_s(filedesc, reinterpret_cast<const char*>(filename), oflag, _SH_DENYNO, pmode) == 0 ? S_OK : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::CloseFile(int filedesc)
+{
+	return _close(filedesc) == 0 ? S_OK : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::WriteFile(int filedesc, long offset, unsigned int size, const void* data)
+{
+	if (size > 0 && data == nullptr)
+		return E_POINTER;
+
+	if (_lseek(filedesc, offset, SEEK_SET) == -1)
+		return E_FAIL;
+
+	return _write(filedesc, data, size) != -1 ? S_OK : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ReadFile(int filedesc, long offset, unsigned int size, void* data)
+{
+	if (size > 0 && data == nullptr)
+		return E_POINTER;
+
+	if (_lseek(filedesc, offset, SEEK_SET) == -1)
+		return E_FAIL;
+
+	return _read(filedesc, data, size) != -1 ? S_OK : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::SeekFile(int filedesc, long offset, int method, long* position)
+{
+	if (position == nullptr)
+		return E_POINTER;
+
+	*position = _lseek(filedesc, offset, method);
+	return *position != -1 ? S_OK : E_FAIL;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::FileLength(int filedesc, long *length)
+{
+	if (length == nullptr)
+		return E_POINTER;
+
+	*length = _filelength(filedesc);
 	return S_OK;
 }
 
@@ -634,4 +774,68 @@ void ConvertFrom(LONG& x, LONG& y, const SIZE& size)
 {
 	x = (x * Wcdx::ContentWidth) / size.cx;
 	y = (y * Wcdx::ContentHeight) / size.cy;
+}
+
+HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)
+{
+	typedef HRESULT(STDAPICALLTYPE* GetKnownFolderPathFn)(REFKNOWNFOLDERID rfid, DWORD dwFlags, HANDLE hToken, PWSTR* ppszPath);
+
+	auto shellModule = ::GetModuleHandle(L"Shell32.dll");
+	if (shellModule != nullptr)
+	{
+		auto GetKnownFolderPath = reinterpret_cast<GetKnownFolderPathFn>(::GetProcAddress(shellModule, "SHGetKnownFolderPath"));
+		if (GetKnownFolderPath != nullptr)
+		{
+			// flags for Known Folder APIs
+			enum { KF_FLAG_CREATE = 0x00008000, KF_FLAG_INIT = 0x00000800 };
+
+			PWSTR folderPath;
+			auto hr = GetKnownFolderPath(FOLDERID_SavedGames, KF_FLAG_CREATE | KF_FLAG_INIT, nullptr, &folderPath);
+			if (FAILED(hr))
+				return hr == E_INVALIDARG ? STG_E_PATHNOTFOUND : hr;
+
+			at_scope_exit([&] { ::CoTaskMemFree(folderPath); });
+
+			PWSTR pathEnd;
+			size_t remaining;
+			if (FAILED(hr = ::StringCchCopyEx(path, MAX_PATH, folderPath, &pathEnd, &remaining, 0)))
+				return hr;
+			if (FAILED(hr = ::StringCchCopyEx(pathEnd, remaining, L"\\", &pathEnd, &remaining, 0)))
+				return hr;
+			return ::StringCchCopy(pathEnd, remaining, subdir);
+		}
+	}
+
+	return E_NOTIMPL;
+}
+
+HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path)
+{
+	auto hr = ::SHGetFolderPath(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, path);
+	if (FAILED(hr))
+		return hr;
+
+	PWSTR pathEnd;
+	size_t remaining;
+	if (FAILED(hr = ::StringCchCatEx(path, MAX_PATH, L"\\", &pathEnd, &remaining, 0)))
+		return hr;
+	return ::StringCchCopy(pathEnd, remaining, subdir);
+}
+
+bool CreateDirectoryRecursive(LPWSTR pathName)
+{
+	if (::CreateDirectory(pathName, nullptr) || ::GetLastError() == ERROR_ALREADY_EXISTS)
+		return true;
+
+	if (::GetLastError() != ERROR_PATH_NOT_FOUND)
+		return false;
+
+	auto i = find(make_reverse_iterator(pathName + wcslen(pathName)), make_reverse_iterator(pathName), L'\\');
+	if (i.base() == pathName)
+		return false;
+
+	*i = L'\0';
+	auto result = CreateDirectoryRecursive(pathName);
+	*i = L'\\';
+	return result && ::CreateDirectory(pathName, nullptr);
 }

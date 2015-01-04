@@ -44,12 +44,11 @@ public:
 public:
 	file();
 	file(const path_char path[], file::mode mode);
+	file(const file&) = delete;
+	file& operator = (const file&) = delete;
 	file(file&& other);
 	file& operator = (file&& other);
 	~file();
-private:
-	file(const file&);
-	file& operator = (const file&);
 
 public:
 	position_type position() const;

@@ -1,5 +1,6 @@
 #include "common.h"
 #include "resource_stream.h"
+#include "md5.h"
 #include "../res/resources.h"
 
 #include "iolib/file_stream.h"
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -43,8 +45,10 @@ struct import_entry_t
 	uint32_t import_table_virtual_address;
 };
 
+static void show_usage(const wchar_t* invocation);
+
 static bool patch_image(seekable_stream& file_data);
-static bool apply_dif(seekable_stream& file_data);
+static bool apply_dif(seekable_stream& file_data, md5_hash hash);
 
 static string read_line(seekable_input_stream& is);
 
@@ -84,10 +88,24 @@ int wmain(int argc, wchar_t* argv[])
 				output_path = *arg;
 			else
 			{
-				wcout << L"Usage:\n\t" << argv[0] << L" <input_path> <output_path>" << endl;
+				show_usage(argv[0]);
 				return EXIT_FAILURE;
 			}
 		}
+	}
+
+	if (input_path == nullptr)
+	{
+		cerr << "No input file specified." << endl;
+		show_usage(argv[0]);
+		return EXIT_FAILURE;
+	}
+
+	if (output_path == nullptr)
+	{
+		cerr << "No output file specified." << endl;
+		show_usage(argv[0]);
+		return EXIT_FAILURE;
 	}
 
 	try
@@ -103,13 +121,15 @@ int wmain(int argc, wchar_t* argv[])
 			input_file.read(file_buffer.data(), file_buffer.size());
 		}
 
+ 		auto hash = md5_hash(file_buffer.data(), file_buffer.size());
+
 		// iolib streams are very good for reading and writing heterogeneous data.
 		memory_stream file_data(file_buffer.data(), file_buffer.size());
 
 		if (!patch_image(file_data))
 			return EXIT_FAILURE;
 
-		if (!headers_only && !apply_dif(file_data))
+		if (!headers_only && !apply_dif(file_data, hash))
 			return EXIT_FAILURE;
 
 		file output_file(output_path, file::mode::open_or_create | file::mode::write);
@@ -125,6 +145,11 @@ int wmain(int argc, wchar_t* argv[])
 	}
 
 	return EXIT_FAILURE;
+}
+
+void show_usage(const wchar_t* invocation)
+{
+	wcout << L"Usage:\n\t" << invocation << L" <input_path> <output_path>" << endl;
 }
 
 bool patch_image(seekable_stream& file_data)
@@ -281,9 +306,19 @@ bool patch_image(seekable_stream& file_data)
 	return true;
 }
 
-bool apply_dif(seekable_stream& file_data)
+bool apply_dif(seekable_stream& file_data, md5_hash hash)
 {
-	resource_stream resource(RESOURCE_ID_WING1_DIFF);
+	constexpr map<md5_hash, uint32_t> diffs =
+	{
+		{ { 0xccc8b82d, 0x79ef51fa, 0xcd158646, 0xf4ab94d1 }, RESOURCE_ID_WING1_DIFF },
+		{ { 0x180491e6, 0x8ae91e28, 0xde8e99e3, 0xb0854881 }, RESOURCE_ID_TRANSFER_DIFF }
+	};
+
+	auto i = diffs.find(hash);
+	if (i == diffs.end())
+		return false;
+
+	resource_stream resource(i->second);
 	string line = read_line(resource);
 	if (line != "This difference file has been created by IDA Pro")
 		return false;
@@ -293,12 +328,10 @@ bool apply_dif(seekable_stream& file_data)
 		line = read_line(resource);
 		if (line.empty())
 			continue;
-		if (line == "Wing1.exe")
-			continue;
 
 		auto n = line.find(':');
 		if (n == string::npos)
-			return false;
+			continue;
 		string_view address_str(line, 0, n);
 
 		n = line.find_first_not_of(' ', n + 1);

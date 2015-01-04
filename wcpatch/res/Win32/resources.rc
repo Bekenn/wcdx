@@ -1,3 +1,4 @@
 #include "../resources.h"
 
-RESOURCE_ID_WING1_DIFF BINARY "..\Wing1.dif"
+RESOURCE_ID_WING1_DIFF		BINARY	"..\\Wing1.dif"
+RESOURCE_ID_TRANSFER_DIFF	BINARY	"..\\TRANSFER.dif"

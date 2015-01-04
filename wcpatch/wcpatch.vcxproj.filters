@@ -57,6 +57,9 @@
     <ClInclude Include="src\Win32\windows_error.h">
       <Filter>Header Files\Win32</Filter>
     </ClInclude>
+    <ClInclude Include="src\md5.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\common.cpp">
@@ -83,9 +86,15 @@
     <ClCompile Include="src\Win32\platform.cpp">
       <Filter>Source Files\Win32</Filter>
     </ClCompile>
+    <ClCompile Include="src\Win32\md5.cpp">
+      <Filter>Source Files\Win32</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\Wing1.dif">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="res\TRANSFER.dif">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

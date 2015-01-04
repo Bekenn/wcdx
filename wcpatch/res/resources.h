@@ -2,6 +2,7 @@
 #define RESOURCES_INCLUDED
 #pragma once
 
-#define RESOURCE_ID_WING1_DIFF 0x100
+#define RESOURCE_ID_WING1_DIFF		0x100
+#define RESOURCE_ID_TRANSFER_DIFF	0x101
 
 #endif

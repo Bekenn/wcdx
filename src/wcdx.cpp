@@ -137,9 +137,10 @@ ULONG STDMETHODCALLTYPE Wcdx::Release()
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetVisible(BOOL visible)
 {
-	if (!::ShowWindow(frameWindow, visible ? SW_SHOW : SW_HIDE))
-		return HRESULT_FROM_WIN32(::GetLastError());
-	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
+	::ShowWindow(frameWindow, visible ? SW_SHOW : SW_HIDE);
+	if (visible)
+		::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
+
 	return S_OK;
 }
 

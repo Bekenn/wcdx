@@ -139,6 +139,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\SM1.dif" />
     <None Include="res\TRANSFER.dif" />
     <None Include="res\Wing1.dif" />
   </ItemGroup>

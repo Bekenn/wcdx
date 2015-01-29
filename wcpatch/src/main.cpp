@@ -48,7 +48,7 @@ struct import_entry_t
 static void show_usage(const wchar_t* invocation);
 
 static bool patch_image(seekable_stream& file_data);
-static bool apply_dif(seekable_stream& file_data, md5_hash hash);
+static bool apply_dif(seekable_stream& file_data, uint32_t hash);
 
 static string read_line(seekable_input_stream& is);
 
@@ -129,7 +129,7 @@ int wmain(int argc, wchar_t* argv[])
 		if (!patch_image(file_data))
 			return EXIT_FAILURE;
 
-		if (!headers_only && !apply_dif(file_data, hash))
+		if (!headers_only && !apply_dif(file_data, hash.a ^ hash.b ^ hash.c ^ hash.d))
 			return EXIT_FAILURE;
 
 		file output_file(output_path, file::mode::open_or_create | file::mode::write);
@@ -306,12 +306,13 @@ bool patch_image(seekable_stream& file_data)
 	return true;
 }
 
-bool apply_dif(seekable_stream& file_data, md5_hash hash)
+bool apply_dif(seekable_stream& file_data, uint32_t hash)
 {
-	constexpr map<md5_hash, uint32_t> diffs =
+	static const map<uint32_t, uint32_t> diffs =
 	{
-		{ { 0xccc8b82d, 0x79ef51fa, 0xcd158646, 0xf4ab94d1 }, RESOURCE_ID_WING1_DIFF },
-		{ { 0x180491e6, 0x8ae91e28, 0xde8e99e3, 0xb0854881 }, RESOURCE_ID_TRANSFER_DIFF }
+		{ 0x8c99fb40, RESOURCE_ID_WING1_DIFF },
+		{ 0xfce65eac, RESOURCE_ID_TRANSFER_DIFF },
+		{ 0xa6ddc22a, RESOURCE_ID_SM1_DIFF }
 	};
 
 	auto i = diffs.find(hash);

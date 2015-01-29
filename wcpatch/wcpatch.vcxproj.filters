@@ -97,6 +97,9 @@
     <None Include="res\TRANSFER.dif">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="res\SM1.dif">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\Win32\resources.rc">

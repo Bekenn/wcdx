@@ -94,6 +94,14 @@ public:
 	typename std::enable_if<std::is_pod<POD>::value, bool>::type
 		read(POD& pod);
 
+	/// \brief Reads a POD value as a sequence of bytes from the stream.
+	/// \throws end_of_stream_error if the end of the stream is reached before enough data has been read.
+	/// \throws stream_read_error   if an error is encountered while reading data from the stream.
+	/// \returns \c true if successful or \c false if the stream contains no more data.
+	template <typename POD>
+	typename std::enable_if<std::is_pod<POD>::value, POD>::type
+		read();
+
 	/// \brief Reads up to \a size objects from \a buffer.
 	/// \param[out] buffer Destination buffer where objects will be written.  Must not be \c nullptr if \a size is
 	//                     non-zero.
@@ -457,6 +465,16 @@ typename std::enable_if<std::is_pod<POD>::value, bool>::type
 	}
 
 	return true;
+}
+
+template <typename POD>
+typename std::enable_if<std::is_pod<POD>::value, POD>::type
+	input_stream::read()
+{
+	POD result;
+	if (!read(result))
+		throw end_of_stream_error();
+	return result;
 }
 
 template <typename POD>

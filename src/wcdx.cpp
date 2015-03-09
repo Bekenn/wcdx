@@ -487,7 +487,7 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 		{
 		case WM_NCCREATE:
 			::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams));
-			return TRUE;
+			break;
 		}
 	}
 	else

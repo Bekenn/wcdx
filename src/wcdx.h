@@ -63,6 +63,7 @@ private:
 	void OnContentMouseMove(DWORD keyState, SHORT x, SHORT y);
 	void OnContentMouseLeave();
 
+    HRESULT CreateIntermediateSurface();
 	void SetFullScreen(bool enabled);
 	void GetContentRect(RECT& contentRect);
 
@@ -83,6 +84,8 @@ private:
 	IDirect3DDevice9Ptr device;
 	IDirect3DSurface9Ptr surface;
 #pragma warning(pop)
+
+    D3DPRESENT_PARAMETERS presentParams;
 
 	WcdxColor palette[256];
 	BYTE framebuffer[ContentWidth * ContentHeight];

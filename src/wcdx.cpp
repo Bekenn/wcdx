@@ -60,7 +60,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 
 	d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
 
-	D3DPRESENT_PARAMETERS params =
+	presentParams =
 	{
 		ContentWidth, ContentHeight, D3DFMT_UNKNOWN, 1,
 		D3DMULTISAMPLE_NONE, 0,
@@ -70,21 +70,11 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 	};
 
 	HRESULT hr;
-	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, frameWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &params, &device)))
+	if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, frameWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &presentParams, &device)))
 		_com_raise_error(hr);
 
-	// Check back buffer format.  If this is already D3DFMT_X8R8G8B8, then we don't need an extra surface.
-	IDirect3DSurface9Ptr backBuffer;
-	if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-		_com_raise_error(hr);
-	D3DSURFACE_DESC desc;
-	if (FAILED(hr = backBuffer->GetDesc(&desc)))
-		_com_raise_error(hr);
-	if (desc.Format != D3DFMT_X8R8G8B8)
-	{
-		if (FAILED(hr = device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr)))
-			_com_raise_error(hr);
-	}
+    if (FAILED(hr = CreateIntermediateSurface()))
+        _com_raise_error(hr);
 
 	WcdxColor defColor = { 0, 0, 0, 0xFF };
 	fill(begin(palette), end(palette), defColor);
@@ -188,7 +178,20 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 		return S_OK;
 
 	HRESULT hr;
-	if (FAILED(hr = device->BeginScene()))
+    if (FAILED(hr = device->TestCooperativeLevel()))
+    {
+        if (hr != D3DERR_DEVICENOTRESET)
+            return hr;
+
+        surface = nullptr;
+        if (FAILED(hr = device->Reset(&presentParams)))
+            return hr;
+
+        if (FAILED(hr = CreateIntermediateSurface()))
+            return hr;
+    }
+
+    if (FAILED(hr = device->BeginScene()))
 		return hr;
 
 	{
@@ -227,7 +230,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 	}
 
 	if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))
-		return hr;
+        return hr;
 
 	return S_OK;
 }
@@ -585,14 +588,6 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 	if ((vkey == VK_RETURN) && ((flags & 0x60) == 0x20))
 	{
 		SetFullScreen(!fullScreen);
-		if (fullScreen)
-		{
-			RECT contentRect;
-			::GetWindowRect(contentWindow, &contentRect);
-			::ClipCursor(&contentRect);
-		}
-		else
-			::ClipCursor(nullptr);
 		return true;
 	}
 
@@ -704,6 +699,26 @@ void Wcdx::OnContentMouseLeave()
 	::ShowCursor(TRUE);
 }
 
+HRESULT Wcdx::CreateIntermediateSurface()
+{
+    HRESULT hr;
+
+    // Check back buffer format.  If this is already D3DFMT_X8R8G8B8, then we don't need an extra surface.
+    IDirect3DSurface9Ptr backBuffer;
+    if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+        return hr;
+
+    D3DSURFACE_DESC desc;
+    if (FAILED(hr = backBuffer->GetDesc(&desc)))
+        return hr;
+
+    if (desc.Format != D3DFMT_X8R8G8B8)
+        return hr = device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr);
+
+    // No need for an intermediate surface.
+    return S_FALSE;
+}
+
 void Wcdx::SetFullScreen(bool enabled)
 {
 	if (enabled == fullScreen)
@@ -726,7 +741,11 @@ void Wcdx::SetFullScreen(bool enabled)
 			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
 			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-		fullScreen = true;
+        RECT contentRect;
+        ::GetWindowRect(contentWindow, &contentRect);
+        ::ClipCursor(&contentRect);
+
+        fullScreen = true;
 	}
 	else
 	{
@@ -739,7 +758,9 @@ void Wcdx::SetFullScreen(bool enabled)
 			frameRect.bottom - frameRect.top,
 			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-		fullScreen = false;
+        ::ClipCursor(nullptr);
+
+        fullScreen = false;
 	}
 
 	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);

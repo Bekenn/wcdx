@@ -57,6 +57,7 @@ private:
 	void OnActivate(WORD state, BOOL minimized, HWND other);
 	void OnNCDestroy();
 	bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
+    bool OnSysCommand(WORD type, SHORT x, SHORT y);
 	void OnSizing(DWORD windowEdge, RECT* dragRect);
 	void OnRender();
 
@@ -66,6 +67,7 @@ private:
     HRESULT CreateIntermediateSurface();
 	void SetFullScreen(bool enabled);
 	void GetContentRect(RECT& contentRect);
+    void ConfineCursor();
 
 private:
 	ULONG refCount;

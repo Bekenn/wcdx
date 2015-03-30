@@ -514,7 +514,12 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 				return 0;
 			break;
 
-		case WM_SIZING:
+        case WM_SYSCOMMAND:
+            if (wcdx->OnSysCommand(wParam, LOWORD(lParam), HIWORD(lParam)))
+                return 0;
+            break;
+
+        case WM_SIZING:
 			wcdx->OnSizing(wParam, reinterpret_cast<RECT*>(lParam));
 			return TRUE;
 
@@ -565,7 +570,7 @@ LRESULT CALLBACK Wcdx::ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam,
 
 void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
 {
-	RECT contentRect;
+    RECT contentRect;
 	GetContentRect(contentRect);
 	::MoveWindow(contentWindow, contentRect.left, contentRect.top, contentRect.right - contentRect.left, contentRect.bottom - contentRect.top, FALSE);
 	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
@@ -574,7 +579,10 @@ void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
 void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
 {
 	if (state != WA_INACTIVE)
+    {
 		::SetFocus(contentWindow);
+        ConfineCursor();
+    }
 }
 
 void Wcdx::OnNCDestroy()
@@ -592,6 +600,17 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 	}
 
 	return false;
+}
+
+bool Wcdx::OnSysCommand(WORD type, SHORT x, SHORT y)
+{
+    if (type == SC_MAXIMIZE)
+    {
+        SetFullScreen(true);
+        return true;
+    }
+
+    return false;
 }
 
 void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
@@ -741,10 +760,6 @@ void Wcdx::SetFullScreen(bool enabled)
 			monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
 			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-        RECT contentRect;
-        ::GetWindowRect(contentWindow, &contentRect);
-        ::ClipCursor(&contentRect);
-
         fullScreen = true;
 	}
 	else
@@ -758,11 +773,10 @@ void Wcdx::SetFullScreen(bool enabled)
 			frameRect.bottom - frameRect.top,
 			SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-        ::ClipCursor(nullptr);
-
         fullScreen = false;
 	}
 
+    ConfineCursor();
 	::PostMessage(frameWindow, WM_APP_RENDER, 0, 0);
 }
 
@@ -786,6 +800,18 @@ void Wcdx::GetContentRect(RECT& contentRect)
 	}
 }
 
+void Wcdx::ConfineCursor()
+{
+    if (fullScreen)
+    {
+        RECT contentRect;
+        ::GetWindowRect(contentWindow, &contentRect);
+        ::ClipCursor(&contentRect);
+    }
+    else
+        ::ClipCursor(nullptr);
+}
+
 void ConvertTo(LONG& x, LONG& y, const SIZE& size)
 {
 	x = ((x * size.cx) / Wcdx::ContentWidth);
@@ -794,8 +820,8 @@ void ConvertTo(LONG& x, LONG& y, const SIZE& size)
 
 void ConvertFrom(LONG& x, LONG& y, const SIZE& size)
 {
-	x = (x * Wcdx::ContentWidth) / size.cx;
-	y = (y * Wcdx::ContentHeight) / size.cy;
+	x = size.cx == 0 ? 0 : (x * Wcdx::ContentWidth) / size.cx;
+	y = size.cy == 0 ? 0 : (y * Wcdx::ContentHeight) / size.cy;
 }
 
 HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)

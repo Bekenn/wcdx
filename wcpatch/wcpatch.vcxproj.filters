@@ -103,6 +103,9 @@
     <None Include="res\SM2.dif">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="res\Wing2.dif">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\Win32\resources.rc">

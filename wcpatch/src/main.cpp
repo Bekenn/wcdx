@@ -313,7 +313,8 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
 		{ 0x8c99fb40, RESOURCE_ID_WING1_DIFF },
 		{ 0xfce65eac, RESOURCE_ID_TRANSFER_DIFF },
 		{ 0xa6ddc22a, RESOURCE_ID_SM1_DIFF },
-		{ 0x74350efd, RESOURCE_ID_SM2_DIFF }
+		{ 0x74350efd, RESOURCE_ID_SM2_DIFF },
+		{ 0x067a8af5, RESOURCE_ID_WING2_DIFF }
 	};
 
 	auto i = diffs.find(hash);

@@ -143,6 +143,7 @@
     <None Include="res\SM2.dif" />
     <None Include="res\TRANSFER.dif" />
     <None Include="res\Wing1.dif" />
+    <None Include="res\Wing2.dif" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="res\Win32\resources.rc" />

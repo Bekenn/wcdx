@@ -159,8 +159,8 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
         min(rect.bottom, LONG(ContentHeight))
     };
 
-    const BYTE* src = static_cast<const BYTE*>(bits);
-    BYTE* dest = framebuffer + clipped.left + (ContentWidth * clipped.top);
+    auto src = static_cast<const BYTE*>(bits);
+    auto dest = framebuffer + clipped.left + (ContentWidth * clipped.top);
     width = clipped.right - clipped.left;
     for (height = clipped.bottom - clipped.top; height-- > 0; )
     {
@@ -193,7 +193,6 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 
     if (FAILED(hr = device->BeginScene()))
         return hr;
-
     {
         at_scope_exit([&]{ device->EndScene(); });
 
@@ -201,24 +200,27 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
         if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
             return hr;
 
-        IDirect3DSurface9Ptr& buffer = surface != nullptr ? surface : backBuffer;
+        auto& buffer = surface != nullptr ? surface : backBuffer;
         D3DLOCKED_RECT locked;
         RECT bounds = { 0, 0, ContentWidth, ContentHeight };
         if (FAILED(hr = buffer->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
             return hr;
-        const BYTE* src = framebuffer;
-        WcdxColor* dest = static_cast<WcdxColor*>(locked.pBits);
-        for (int row = 0; row < ContentHeight; ++row)
         {
-            transform(src, src + ContentWidth, dest, [&](BYTE index)
-            {
-                return palette[index];
-            });
+            at_scope_exit([&]{ buffer->UnlockRect(); });
 
-            src += ContentWidth;
-            dest += locked.Pitch / sizeof(*dest);
+            const BYTE* src = framebuffer;
+            auto dest = static_cast<WcdxColor*>(locked.pBits);
+            for (int row = 0; row < ContentHeight; ++row)
+            {
+                transform(src, src + ContentWidth, dest, [&](BYTE index)
+                {
+                    return palette[index];
+                });
+
+                src += ContentWidth;
+                dest += locked.Pitch / sizeof(*dest);
+            }
         }
-        hr = buffer->UnlockRect();
 
         if (surface != nullptr)
         {
@@ -483,7 +485,7 @@ ATOM Wcdx::ContentWindowClass()
 
 LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    Wcdx* wcdx = reinterpret_cast<Wcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    auto wcdx = reinterpret_cast<Wcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
     if (wcdx == nullptr)
     {
         switch (message)
@@ -534,7 +536,7 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 
 LRESULT CALLBACK Wcdx::ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    IWcdx* wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    auto wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
     if (wcdx == nullptr)
     {
         switch (message)

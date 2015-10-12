@@ -2,6 +2,8 @@
 #define WCDX_INCLUDED
 #pragma once
 
+#include "window.h"
+
 #include <iwcdx.h>
 
 #include <comdef.h>
@@ -18,7 +20,6 @@ public:
 	Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen);
 	Wcdx(const Wcdx&) = delete;
 	Wcdx& operator = (const Wcdx&) = delete;
-	~Wcdx();
 
 public:
 	// IUnknown
@@ -71,7 +72,7 @@ private:
 
 private:
 	ULONG refCount;
-	HWND frameWindow;
+	SmartWindow frameWindow;
 	HWND contentWindow;
 	WNDPROC clientWindowProc;
 	DWORD frameStyle;
@@ -87,6 +88,7 @@ private:
 	IDirect3DSurface9Ptr surface;
 #pragma warning(pop)
 
+    D3DCAPS9 deviceCaps;
     D3DPRESENT_PARAMETERS presentParams;
 
 	WcdxColor palette[256];

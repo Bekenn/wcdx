@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <system_error>
 
 #include <io.h>
 #include <fcntl.h>
@@ -40,7 +41,7 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
 
 Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW), fullScreen(false), dirty(false), mouseOver(false)
 {
-    frameWindow = ::CreateWindowEx(frameExStyle,
+    frameWindow = SmartWindow(frameExStyle,
         reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
         frameStyle,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -60,17 +61,55 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
 
     d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
 
+    // Find the adapter corresponding to the window.
+    HRESULT hr;
+    UINT adapter = D3DADAPTER_DEFAULT;
+    D3DDISPLAYMODE currentMode;
+    HMONITOR monitor = ::MonitorFromWindow(contentWindow, MONITOR_DEFAULTTOPRIMARY);
+    for (UINT n = 0, count = d3d->GetAdapterCount(); n < count; ++n)
+    {
+        if (FAILED(hr = d3d->GetAdapterDisplayMode(n, &currentMode)))
+            _com_raise_error(hr);
+
+        // Require hardware acceleration.
+        hr = d3d->CheckDeviceType(n, D3DDEVTYPE_HAL, currentMode.Format, currentMode.Format, TRUE);
+        if (hr == D3DERR_NOTAVAILABLE)
+            continue;
+        if (FAILED(hr))
+            _com_raise_error(hr);
+
+        D3DCAPS9 caps;
+        hr = d3d->GetDeviceCaps(n, D3DDEVTYPE_HAL, &caps);
+        if (hr == D3DERR_NOTAVAILABLE)
+            continue;
+        if (FAILED(hr))
+            _com_raise_error(hr);
+
+        // Select the adapter that's already displaying the window.
+        if (d3d->GetAdapterMonitor(n) == monitor)
+        {
+            // Only use the master adapter in an adapter group.
+            adapter = caps.MasterAdapterOrdinal;
+            break;
+        }
+    }
+
+    if (FAILED(hr = d3d->GetDeviceCaps(adapter, D3DDEVTYPE_HAL, &deviceCaps)))
+        _com_raise_error(hr);
+
+    if (FAILED(hr = d3d->GetAdapterDisplayMode(adapter, &currentMode)))
+        _com_raise_error(hr);
+
     presentParams =
     {
-        ContentWidth, ContentHeight, D3DFMT_UNKNOWN, 1,
+        currentMode.Width, currentMode.Height, currentMode.Format, 1,
         D3DMULTISAMPLE_NONE, 0,
-        D3DSWAPEFFECT_DISCARD, contentWindow, TRUE,
+        D3DSWAPEFFECT_COPY, contentWindow, TRUE,
         FALSE, D3DFMT_UNKNOWN,
-        D3DPRESENTFLAG_LOCKABLE_BACKBUFFER, 0, D3DPRESENT_INTERVAL_DEFAULT
+        0, 0, D3DPRESENT_INTERVAL_DEFAULT
     };
 
-    HRESULT hr;
-    if (FAILED(hr = d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, frameWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &presentParams, &device)))
+    if (FAILED(hr = d3d->CreateDevice(adapter, D3DDEVTYPE_HAL, frameWindow, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &presentParams, &device)))
         _com_raise_error(hr);
 
     if (FAILED(hr = CreateIntermediateSurface()))
@@ -80,12 +119,6 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
     fill(begin(palette), end(palette), defColor);
 
     SetFullScreen(IsDebuggerPresent() ? false : fullScreen);
-}
-
-Wcdx::~Wcdx()
-{
-    if (frameWindow != nullptr)
-        ::DestroyWindow(frameWindow);
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
@@ -191,6 +224,9 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
             return hr;
     }
 
+    RECT activeRect;
+    ::GetClientRect(contentWindow, &activeRect);
+
     if (FAILED(hr = device->BeginScene()))
         return hr;
     {
@@ -200,13 +236,12 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
         if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
             return hr;
 
-        auto& buffer = surface != nullptr ? surface : backBuffer;
         D3DLOCKED_RECT locked;
         RECT bounds = { 0, 0, ContentWidth, ContentHeight };
-        if (FAILED(hr = buffer->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
+        if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
             return hr;
         {
-            at_scope_exit([&]{ buffer->UnlockRect(); });
+            at_scope_exit([&]{ surface->UnlockRect(); });
 
             const BYTE* src = framebuffer;
             auto dest = static_cast<WcdxColor*>(locked.pBits);
@@ -222,16 +257,13 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
             }
         }
 
-        if (surface != nullptr)
-        {
-            if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, nullptr, D3DTEXF_POINT)))
-                return hr;
-        }
+        if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, &activeRect, D3DTEXF_POINT)))
+            return hr;
 
         dirty = false;
     }
 
-    if (FAILED(hr = device->Present(nullptr, nullptr, nullptr, nullptr)))
+    if (FAILED(hr = device->Present(&activeRect, nullptr, nullptr, nullptr)))
         return hr;
 
     return S_OK;
@@ -589,7 +621,7 @@ void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
 
 void Wcdx::OnNCDestroy()
 {
-    frameWindow = nullptr;
+    frameWindow.Reset();
     contentWindow = nullptr;
 }
 
@@ -722,22 +754,7 @@ void Wcdx::OnContentMouseLeave()
 
 HRESULT Wcdx::CreateIntermediateSurface()
 {
-    HRESULT hr;
-
-    // Check back buffer format.  If this is already D3DFMT_X8R8G8B8, then we don't need an extra surface.
-    IDirect3DSurface9Ptr backBuffer;
-    if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-        return hr;
-
-    D3DSURFACE_DESC desc;
-    if (FAILED(hr = backBuffer->GetDesc(&desc)))
-        return hr;
-
-    if (desc.Format != D3DFMT_X8R8G8B8)
-        return hr = device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr);
-
-    // No need for an intermediate surface.
-    return S_FALSE;
+    return device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr);
 }
 
 void Wcdx::SetFullScreen(bool enabled)
@@ -749,8 +766,7 @@ void Wcdx::SetFullScreen(bool enabled)
     {
         ::GetWindowRect(frameWindow, &frameRect);
 
-        frameStyle = ::GetWindowLong(frameWindow, GWL_STYLE);
-        ::SetWindowLong(frameWindow, GWL_STYLE, WS_OVERLAPPED);
+        frameStyle = ::SetWindowLong(frameWindow, GWL_STYLE, WS_OVERLAPPED);
         frameExStyle = ::SetWindowLong(frameWindow, GWL_EXSTYLE, 0);
 
         HMONITOR monitor = ::MonitorFromWindow(frameWindow, MONITOR_DEFAULTTONEAREST);

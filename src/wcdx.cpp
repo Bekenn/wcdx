@@ -393,6 +393,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::SavedGameOpen(const wchar_t* subdir, const wchar
                 if (::MoveFileEx(filename, path, MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING)
                     || ::CopyFile(filename, path, FALSE))
                 {
+                    ::DeleteFile(filename);
                     filename = path;
                     break;
                 }
@@ -426,7 +427,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::WriteFile(int filedesc, long offset, unsigned in
     if (size > 0 && data == nullptr)
         return E_POINTER;
 
-    if (_lseek(filedesc, offset, SEEK_SET) == -1)
+    if (offset != -1 && _lseek(filedesc, offset, SEEK_SET) == -1)
         return E_FAIL;
 
     return _write(filedesc, data, size) != -1 ? S_OK : E_FAIL;
@@ -437,7 +438,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ReadFile(int filedesc, long offset, unsigned int
     if (size > 0 && data == nullptr)
         return E_POINTER;
 
-    if (_lseek(filedesc, offset, SEEK_SET) == -1)
+    if (offset != -1 && _lseek(filedesc, offset, SEEK_SET) == -1)
         return E_FAIL;
 
     return _read(filedesc, data, size) != -1 ? S_OK : E_FAIL;

@@ -462,6 +462,44 @@ HRESULT STDMETHODCALLTYPE Wcdx::FileLength(int filedesc, long *length)
     return S_OK;
 }
 
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToScreen(POINT* point)
+{
+    HRESULT hr;
+    if (FAILED(hr = ConvertPointToClient(point)))
+        return hr;
+    ClientToScreen(contentWindow, point);
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromScreen(POINT* point)
+{
+    if (point == nullptr)
+        return E_POINTER;
+
+    ScreenToClient(contentWindow, point);
+    return ConvertPointFromClient(point);
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToScreen(RECT* rect)
+{
+    HRESULT hr;
+    if (FAILED(hr = ConvertRectToClient(rect)))
+        return E_POINTER;
+    ClientToScreen(contentWindow, reinterpret_cast<POINT*>(&rect->left));
+    ClientToScreen(contentWindow, reinterpret_cast<POINT*>(&rect->right));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromScreen(RECT* rect)
+{
+    if (rect == nullptr)
+        return E_POINTER;
+
+    ScreenToClient(contentWindow, reinterpret_cast<POINT*>(&rect->left));
+    ScreenToClient(contentWindow, reinterpret_cast<POINT*>(&rect->right));
+    return ConvertRectFromClient(rect);
+}
+
 ATOM Wcdx::FrameWindowClass()
 {
     static ATOM windowClass = 0;

@@ -48,6 +48,11 @@ public:
 	HRESULT STDMETHODCALLTYPE SeekFile(int filedesc, long offset, int method, long* position) override;
 	HRESULT STDMETHODCALLTYPE FileLength(int filedesc, long *length) override;
 
+    HRESULT STDMETHODCALLTYPE ConvertPointToScreen(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertPointFromScreen(POINT* point) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectToScreen(RECT* rect) override;
+    HRESULT STDMETHODCALLTYPE ConvertRectFromScreen(RECT* rect) override;
+
 private:
 	static ATOM FrameWindowClass();
 	static ATOM ContentWindowClass();

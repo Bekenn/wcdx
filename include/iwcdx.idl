@@ -45,4 +45,9 @@ interface IWcdx : IUnknown
 	HRESULT ReadFile(int filedesc, long offset, unsigned size, [out, size_is(size)] void* data);
 	HRESULT SeekFile(int filedesc, long offset, int method, [out, ref] long* position);
 	HRESULT FileLength(int filedesc, [out, ref] long* length);
+
+    HRESULT ConvertPointToScreen([in, out, ref] POINT* point);
+    HRESULT ConvertPointFromScreen([in, out, ref] POINT* point);
+    HRESULT ConvertRectToScreen([in, out, ref] RECT* rect);
+    HRESULT ConvertRectFromScreen([in, out, ref] RECT* rect);
 }

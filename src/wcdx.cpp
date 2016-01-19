@@ -500,6 +500,38 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromScreen(RECT* rect)
     return ConvertRectFromClient(rect);
 }
 
+HRESULT STDMETHODCALLTYPE Wcdx::QueryValue(const wchar_t* keyname, const wchar_t* valuename, void* data, DWORD* size)
+{
+    HKEY roots[] = { HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE };
+
+    for (auto root : roots)
+    {
+        HKEY key;
+        auto error = ::RegOpenKeyEx(root, keyname, 0, KEY_QUERY_VALUE, &key);
+        if (error != ERROR_SUCCESS)
+            return HRESULT_FROM_WIN32(error);
+        at_scope_exit([&]{ ::RegCloseKey(key); });
+
+        error = ::RegQueryValueEx(key, valuename, nullptr, nullptr, static_cast<BYTE*>(data), size);
+        if (error != ERROR_FILE_NOT_FOUND)
+            return HRESULT_FROM_WIN32(error);
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::SetValue(const wchar_t* keyname, const wchar_t* valuename, DWORD type, const void* data, DWORD size)
+{
+    HKEY key;
+    auto error = ::RegCreateKeyEx(HKEY_CURRENT_USER, keyname, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr);
+    if (error != ERROR_SUCCESS)
+        return HRESULT_FROM_WIN32(error);
+    at_scope_exit([&]{ ::RegCloseKey(key); });
+
+    error = ::RegSetValueEx(key, valuename, 0, type, static_cast<const BYTE*>(data), size);
+    return HRESULT_FROM_WIN32(error);
+}
+
 ATOM Wcdx::FrameWindowClass()
 {
     static ATOM windowClass = 0;
@@ -899,7 +931,7 @@ HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)
             if (FAILED(hr))
                 return hr == E_INVALIDARG ? STG_E_PATHNOTFOUND : hr;
 
-            at_scope_exit([&] { ::CoTaskMemFree(folderPath); });
+            at_scope_exit([&]{ ::CoTaskMemFree(folderPath); });
 
             PWSTR pathEnd;
             size_t remaining;

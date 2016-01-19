@@ -53,6 +53,9 @@ public:
     HRESULT STDMETHODCALLTYPE ConvertRectToScreen(RECT* rect) override;
     HRESULT STDMETHODCALLTYPE ConvertRectFromScreen(RECT* rect) override;
 
+    HRESULT STDMETHODCALLTYPE QueryValue(const wchar_t* keyname, const wchar_t* valuename, void* data, DWORD* size) override;
+    HRESULT STDMETHODCALLTYPE SetValue(const wchar_t* keyname, const wchar_t* valuename, DWORD type, const void* data, DWORD size) override;
+
 private:
 	static ATOM FrameWindowClass();
 	static ATOM ContentWindowClass();

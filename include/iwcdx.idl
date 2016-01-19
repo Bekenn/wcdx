@@ -50,4 +50,7 @@ interface IWcdx : IUnknown
     HRESULT ConvertPointFromScreen([in, out, ref] POINT* point);
     HRESULT ConvertRectToScreen([in, out, ref] RECT* rect);
     HRESULT ConvertRectFromScreen([in, out, ref] RECT* rect);
+
+    HRESULT QueryValue([in, string] const wchar_t* keyname, [in, string] const wchar_t* valuename, [out, size_is(*size)] void* data, [in, out, ref] DWORD* size);
+    HRESULT SetValue([in, string] const wchar_t* keyname, [in, string] const wchar_t* valuename, DWORD type, [in, size_is(size)] const void* data, DWORD size);
 }

@@ -5,12 +5,18 @@
 #include <memory>
 #include <utility>
 
+#include <cstddef>
 
-#define lengthof(arr) (sizeof(arr) / sizeof(arr[0]))
 
 #define at_scope_exit(cb) auto CONCAT(scope_exit_, __COUNTER__) = make_scope_guard(cb);
 #define CONCAT(a, b) CONCAT2(a, b)
 #define CONCAT2(a, b) a ## b
+
+template <class T, size_t size>
+constexpr size_t lengthof(T (&)[size]) noexcept
+{
+    return size;
+}
 
 template <class Callback>
 class scope_guard

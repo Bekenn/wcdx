@@ -323,7 +323,8 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
 
 	resource_stream resource(i->second);
 	string line = read_line(resource);
-	if (line != "This difference file has been created by IDA Pro")
+    char tag[] = "This difference file has been created by IDA";
+	if (mismatch(line.begin(), line.end(), begin(tag), end(tag)).second != end(tag) - 1)
 		return false;
 
 	while (!resource.at_end())

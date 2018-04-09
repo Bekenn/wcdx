@@ -1,4 +1,4 @@
-#include "file_stream.h"
+#include <iolib/file_stream.h>
 
 using namespace iolib;
 using namespace std;

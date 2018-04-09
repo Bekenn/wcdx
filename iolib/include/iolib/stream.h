@@ -2,7 +2,6 @@
 #define IOLIB_STREAM_INCLUDED
 #pragma once
 
-#include "string_view.h"
 #include "error.h"
 
 #include <iterator>

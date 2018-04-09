@@ -3,23 +3,20 @@
 
 #include <iwcdx.h>
 
-#include <d3d9.h>
-#include <Shlwapi.h>
-#include <comdef.h>
-
 #include <algorithm>
 #include <memory>
 #include <vector>
 
-#include <assert.h>
+#include <cassert>
+
+#include <d3d9.h>
+#include <Shlwapi.h>
+#include <comdef.h>
 
 // GDI+ headers use unqualified min and max (probably expecting the Windows macros)
 using std::min;
 using std::max;
-#pragma warning(push)
-#pragma warning(disable: 4458) // VS2015 Preview warns about hidden names in GDI+ headers
 #include <gdiplus.h>
-#pragma warning(pop)
 
 
 using namespace Gdiplus;

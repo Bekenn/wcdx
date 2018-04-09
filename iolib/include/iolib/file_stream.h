@@ -3,7 +3,6 @@
 #pragma once
 
 #include "stream.h"
-#include "string_view.h"
 #include "types.h"
 
 #include <fstream>

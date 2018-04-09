@@ -1,4 +1,4 @@
-#include "stream.h"
+#include <iolib/stream.h>
 
 #include <algorithm>
 #include <cassert>

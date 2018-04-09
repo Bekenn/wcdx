@@ -409,12 +409,12 @@ HRESULT STDMETHODCALLTYPE Wcdx::SavedGameOpen(const wchar_t* subdir, const wchar
     return E_FAIL;
 }
 
-HRESULT STDMETHODCALLTYPE Wcdx::OpenFile(const unsigned char* filename, int oflag, int pmode, int* filedesc)
+HRESULT STDMETHODCALLTYPE Wcdx::OpenFile(const char* filename, int oflag, int pmode, int* filedesc)
 {
     if (filename == nullptr || filedesc == nullptr)
         return E_POINTER;
 
-    return _sopen_s(filedesc, reinterpret_cast<const char*>(filename), oflag, _SH_DENYNO, pmode) == 0 ? S_OK : E_FAIL;
+    return _sopen_s(filedesc, filename, oflag, _SH_DENYNO, pmode) == 0 ? S_OK : E_FAIL;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::CloseFile(int filedesc)

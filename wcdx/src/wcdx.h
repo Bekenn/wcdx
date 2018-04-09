@@ -41,7 +41,7 @@ public:
     HRESULT STDMETHODCALLTYPE ConvertRectFromClient(RECT* rect) override;
 
 	HRESULT STDMETHODCALLTYPE SavedGameOpen(const wchar_t* subdir, const wchar_t* filename, int oflag, int pmode, int* filedesc) override;
-	HRESULT STDMETHODCALLTYPE OpenFile(const unsigned char* filename, int oflag, int pmode, int* filedesc) override;
+	HRESULT STDMETHODCALLTYPE OpenFile(const char* filename, int oflag, int pmode, int* filedesc) override;
 	HRESULT STDMETHODCALLTYPE CloseFile(int filedesc) override;
 	HRESULT STDMETHODCALLTYPE WriteFile(int filedesc, long offset, unsigned int size, const void* data) override;
 	HRESULT STDMETHODCALLTYPE ReadFile(int filedesc, long offset, unsigned int size, void* data) override;

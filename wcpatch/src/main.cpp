@@ -3,8 +3,8 @@
 #include "md5.h"
 #include "../res/resources.h"
 
-#include "iolib/file_stream.h"
-#include "iolib/string_view.h"
+#include <iolib/file_stream.h>
+#include <iolib/string_view.h>
 
 #include <algorithm>
 #include <iostream>
@@ -12,11 +12,11 @@
 #include <string>
 #include <vector>
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <wchar.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cwchar>
 
 
 using namespace std;
@@ -60,7 +60,7 @@ static const uint16_t OptionalHeader_PE32PlusSignature = 0x20B;
 
 int wmain(int argc, wchar_t* argv[])
 {
-#if _DEBUG
+#ifdef _DEBUG
 	at_scope_exit([&]{ system("pause"); });
 #endif
 
@@ -336,7 +336,7 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
 		auto n = line.find(':');
 		if (n == string::npos)
 			continue;
-		string_view address_str(line, 0, n);
+		string_view address_str(line.data(), n);
 
 		n = line.find_first_not_of(' ', n + 1);
 		if (n == string::npos)
@@ -344,7 +344,7 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
 		auto m = line.find(' ', n);
 		if (n == string::npos)
 			return false;
-		string_view original_value_str(line, n, m - n);
+		string_view original_value_str(line.data() + n, m - n);
 
 		n = line.find_first_not_of(' ', m + 1);
 		if (n == string::npos)
@@ -352,7 +352,7 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
 		m = line.find(' ', n);
 		if (m == string::npos)
 			m = line.length();
-		string_view replacement_value_str(line, n, m - n);
+		string_view replacement_value_str(line.data() + n, m - n);
 
 		if (line.find_first_not_of(' ', m + 1) != string::npos)
 			return false;

@@ -11,8 +11,8 @@ namespace iolib {
 class invalid_operation : public std::logic_error
 {
 public:
-	explicit invalid_operation(const std::string& what_arg) : logic_error(what_arg) { }
-	explicit invalid_operation(const char* what_arg)        : logic_error(what_arg) { }
+    explicit invalid_operation(const std::string& what_arg) : logic_error(what_arg) { }
+    explicit invalid_operation(const char* what_arg)        : logic_error(what_arg) { }
 };
 
 /// Defines the type of objects thrown to indicate that a particular operation, while valid,
@@ -20,8 +20,8 @@ public:
 class not_implemented : public std::logic_error
 {
 public:
-	explicit not_implemented(const std::string& what_arg) : logic_error(what_arg) { }
-	explicit not_implemented(const char* what_arg)        : logic_error(what_arg) { }
+    explicit not_implemented(const std::string& what_arg) : logic_error(what_arg) { }
+    explicit not_implemented(const char* what_arg)        : logic_error(what_arg) { }
 };
 
 } // namespace iolib

@@ -22,23 +22,23 @@ template <class Callback>
 class scope_guard
 {
 public:
-	scope_guard(Callback cb) : cb(cb), valid(true) { }
-	scope_guard(scope_guard&& other) : cb(std::move(other.cb)), valid(std::move(other.valid)) { other.valid = false; }
-	scope_guard& operator = (scope_guard&& other) { cb = std::move(other.cb); valid = std::move(other.valid); other.valid = false; return *this; }
-	~scope_guard() { if (valid) cb(); }
+    scope_guard(Callback cb) : cb(cb), valid(true) { }
+    scope_guard(scope_guard&& other) : cb(std::move(other.cb)), valid(std::move(other.valid)) { other.valid = false; }
+    scope_guard& operator = (scope_guard&& other) { cb = std::move(other.cb); valid = std::move(other.valid); other.valid = false; return *this; }
+    ~scope_guard() { if (valid) cb(); }
 private:
-	scope_guard(const scope_guard& other);
-	scope_guard& operator = (const scope_guard& other);
+    scope_guard(const scope_guard& other);
+    scope_guard& operator = (const scope_guard& other);
 
 private:
-	Callback cb;
-	bool valid;
+    Callback cb;
+    bool valid;
 };
 
 template <class Callback>
 scope_guard<Callback> make_scope_guard(Callback cb)
 {
-	return scope_guard<Callback>(cb);
+    return scope_guard<Callback>(cb);
 }
 
 // VS 2013 defines this function from C++14.
@@ -46,7 +46,7 @@ scope_guard<Callback> make_scope_guard(Callback cb)
 template <class T, class... Args>
 std::unique_ptr<T> make_unique(Args&&... args)
 {
-	return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 #endif
 

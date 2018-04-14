@@ -6,13 +6,13 @@
 
 
 #define flags_enum(flags_type) \
-	inline flags_type operator ~ (flags_type f) { return static_cast<flags_type>(~std::underlying_type<flags_type>::type(f)); } \
-	inline flags_type operator & (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) & std::underlying_type<flags_type>::type(b)); } \
-	inline flags_type operator | (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) | std::underlying_type<flags_type>::type(b)); } \
-	inline flags_type operator ^ (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) ^ std::underlying_type<flags_type>::type(b)); } \
-	inline flags_type operator &= (flags_type a, flags_type b) { return a = a & b; } \
-	inline flags_type operator |= (flags_type a, flags_type b) { return a = a | b; } \
-	inline flags_type operator ^= (flags_type a, flags_type b) { return a = a ^ b; }
+    inline flags_type operator ~ (flags_type f) { return static_cast<flags_type>(~std::underlying_type<flags_type>::type(f)); } \
+    inline flags_type operator & (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) & std::underlying_type<flags_type>::type(b)); } \
+    inline flags_type operator | (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) | std::underlying_type<flags_type>::type(b)); } \
+    inline flags_type operator ^ (flags_type a, flags_type b) { return static_cast<flags_type>(std::underlying_type<flags_type>::type(a) ^ std::underlying_type<flags_type>::type(b)); } \
+    inline flags_type operator &= (flags_type a, flags_type b) { return a = a & b; } \
+    inline flags_type operator |= (flags_type a, flags_type b) { return a = a | b; } \
+    inline flags_type operator ^= (flags_type a, flags_type b) { return a = a ^ b; }
 
 namespace iolib {
 

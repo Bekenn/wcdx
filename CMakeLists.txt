@@ -6,7 +6,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 project(wcdx)
 
-add_subdirectory(iolib)
+add_subdirectory(stdext)
 add_subdirectory(wcdx)
 add_subdirectory(test)
 add_subdirectory(wcpatch)

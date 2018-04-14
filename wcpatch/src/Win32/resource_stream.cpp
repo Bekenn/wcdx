@@ -7,7 +7,7 @@
 #include <map>
 
 
-using namespace iolib;
+using namespace stdext;
 using namespace std;
 using namespace windows;
 
@@ -32,30 +32,16 @@ private:
 };
 
 
-resource_stream::resource_stream()
+resource_stream::resource_stream(std::unique_ptr<impl> pimpl) : memory_input_stream(pimpl->res->data, pimpl->res->size)
+    , pimpl(std::move(pimpl))
 {
 }
 
-resource_stream::resource_stream(uint32_t id) : pimpl(make_unique<impl>(id))
+resource_stream::resource_stream(uint32_t id) : resource_stream(make_unique<impl>(id))
 {
-    *static_cast<memory_input_stream*>(this) = memory_input_stream(pimpl->res->data, pimpl->res->size);
 }
 
-resource_stream::resource_stream(resource_stream&& other) : pimpl(move(other.pimpl))
-{
-    *static_cast<memory_input_stream*>(this) = std::move(other);
-}
-
-resource_stream& resource_stream::operator = (resource_stream&& other)
-{
-    pimpl = std::move(other.pimpl);
-    *static_cast<memory_input_stream*>(this) = std::move(other);
-    return *this;
-}
-
-resource_stream::~resource_stream()
-{
-}
+resource_stream::~resource_stream() = default;
 
 map<uint32_t, weak_ptr<resource>> resource_stream::impl::loaded_resources;
 

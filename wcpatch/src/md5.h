@@ -2,10 +2,10 @@
 #define MD5_INCLUDED
 #pragma once
 
-#include "iolib/file_stream.h"
+#include <stdext/file.h>
 
 #include <initializer_list>
-#include <stdint.h>
+#include <cstdint>
 
 
 struct md5_hash;

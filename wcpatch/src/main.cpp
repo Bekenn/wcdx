@@ -3,12 +3,14 @@
 #include "md5.h"
 #include "../res/resources.h"
 
-#include <iolib/file_stream.h>
-#include <iolib/string_view.h>
+#include <stdext/file.h>
+#include <stdext/multi.h>
+#include <stdext/string_view.h>
 
 #include <algorithm>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,7 +22,7 @@
 
 
 using namespace std;
-using namespace iolib;
+using namespace stdext;
 
 struct section_header_t
 {
@@ -47,10 +49,10 @@ struct import_entry_t
 
 static void show_usage(const wchar_t* invocation);
 
-static bool patch_image(seekable_stream& file_data);
-static bool apply_dif(seekable_stream& file_data, uint32_t hash);
+static bool patch_image(multi_ref<stream, seekable> file_data);
+static bool apply_dif(multi_ref<stream, seekable> file_data, uint32_t hash);
 
-static string read_line(seekable_input_stream& is);
+static optional<string> read_line(multi_ref<input_stream, seekable> is);
 
 static const import_entry_t import_entry_null = { };
 
@@ -113,17 +115,17 @@ int wmain(int argc, wchar_t* argv[])
         // Read the input file into an in-memory buffer.
         vector<uint8_t> file_buffer;
         {
-            file input_file(input_path, file::mode::open | file::mode::read);
-            input_file.seek(0, file::seek_from::end);
+            file_input_stream input_file(input_path);
+            input_file.seek(seek_from::end, 0);
             size_t size = size_t(input_file.position());
             file_buffer.resize(size);
-            input_file.seek(0, file::seek_from::beginning);
+            input_file.seek(seek_from::begin, 0);
             input_file.read(file_buffer.data(), file_buffer.size());
         }
 
         auto hash = md5_hash(file_buffer.data(), file_buffer.size());
 
-        // iolib streams are very good for reading and writing heterogeneous data.
+        // stdext streams are very good for reading and writing heterogeneous data.
         memory_stream file_data(file_buffer.data(), file_buffer.size());
 
         if (!patch_image(file_data))
@@ -132,7 +134,7 @@ int wmain(int argc, wchar_t* argv[])
         if (!headers_only && !apply_dif(file_data, hash.a ^ hash.b ^ hash.c ^ hash.d))
             return EXIT_FAILURE;
 
-        file output_file(output_path, file::mode::open_or_create | file::mode::write);
+        file_output_stream output_file(output_path);
         output_file.write(file_buffer.data(), file_buffer.size());
         return EXIT_SUCCESS;
     }
@@ -142,6 +144,7 @@ int wmain(int argc, wchar_t* argv[])
     }
     catch (...)
     {
+        cerr << "Unknown error" << endl;
     }
 
     return EXIT_FAILURE;
@@ -152,41 +155,38 @@ void show_usage(const wchar_t* invocation)
     wcout << L"Usage:\n\t" << invocation << L" <input_path> <output_path>" << endl;
 }
 
-bool patch_image(seekable_stream& file_data)
+bool patch_image(multi_ref<stream, seekable> file_data)
 {
+    auto& stream = file_data.as<stdext::stream>();
+    auto& seekable = file_data.as<stdext::seekable>();
+
     // Read offset of PE header
-    file_data.seek(0x3C);
-    uint32_t offset;
-    file_data.read(offset);
+    seekable.set_position(0x3C);
+    auto offset = stream.read<uint32_t>();
 
     // Read PE signature
-    file_data.seek(offset, seekable_stream::seek_from::beginning);
+    seekable.seek(seek_from::begin, offset);
     char signature[4];
-    file_data.read(signature);
-    if (!equal(begin(signature), end(signature), begin(PESignature)))
+    if (stream.read(signature) != lengthof(signature) || !equal(begin(signature), end(signature), begin(PESignature)))
     {
         wcerr << L"Error: Input file is not a valid executable." << endl;
         return false;
     }
 
     // Read number of sections
-    file_data.seek(2);
-    uint16_t section_count;
-    file_data.read(section_count);
+    seekable.seek(seek_from::current, 2);
+    auto section_count = stream.read<uint16_t>();
 
     // Read optional header size
-    file_data.seek(12);
-    uint16_t header_size;
-    file_data.read(header_size);
+    seekable.seek(seek_from::current, 12);
+    auto header_size = stream.read<uint16_t>();
 
     // Set the IMAGE_FILE_RELOCS_STRIPPED flag
-    uint16_t flags;
-    file_data.read(flags);
-    file_data.seek(-2);
-    file_data.write(uint16_t(flags | 1));
+    auto flags = stream.read<uint16_t>();
+    seekable.seek(seek_from::current, -2);
+    stream.write(uint16_t(flags | 1));
 
-    uint16_t pe_type_signature;
-    file_data.read(pe_type_signature);
+    auto pe_type_signature = stream.read<uint16_t>();
     if (pe_type_signature != OptionalHeader_PE32Signature && pe_type_signature != OptionalHeader_PE32PlusSignature)
     {
         wcerr << L"Error: Input file is not a valid executable." << endl;
@@ -194,46 +194,45 @@ bool patch_image(seekable_stream& file_data)
     }
 
     // Set the minimum OS fields to Windows XP
-    file_data.seek(38);
-    file_data.write(uint16_t(5));
-    file_data.write(uint16_t(1));
-    file_data.seek(4);
-    file_data.write(uint16_t(5));
-    file_data.write(uint16_t(1));
+    seekable.seek(seek_from::current, 38);
+    stream.write(uint16_t(5));
+    stream.write(uint16_t(1));
+    seekable.seek(seek_from::current, 4);
+    stream.write(uint16_t(5));
+    stream.write(uint16_t(1));
 
     // Set the NX-compatible bit
-    file_data.seek(18);
-    file_data.read(flags);
+    seekable.seek(seek_from::current, 18);
+    flags = stream.read<uint16_t>();
     flags |= 0x0100;
-    file_data.seek(-2);
-    file_data.write(flags);
+    seekable.seek(seek_from::current, -2);
+    stream.write(flags);
 
     // Skip to the data directories and clear out the relocation table entry.
-    file_data.seek(20);
-    uint32_t count;
-    file_data.read(count);
+    seekable.seek(seek_from::current, 20);
+    auto count = stream.read<uint32_t>();
     if (count >= 6)
     {
-        file_data.seek(5 * 8);
-        file_data.write(uint32_t(0));   // relocation data offset
-        file_data.write(uint32_t(0));   // relocation data size
+        seekable.seek(seek_from::current, 5 * 8);
+        stream.write(uint32_t(0));  // relocation data offset
+        stream.write(uint32_t(0));  // relocation data size
 
         // Skip to the section tables.
-        file_data.seek(header_size - 96 - (6 * 8)); // seek past the optional header
+        seekable.seek(seek_from::current, header_size - 96 - (6 * 8));  // seek past the optional header
     }
     else
-        file_data.seek(header_size - 96);   // Skip to the section tables.
+        seekable.seek(seek_from::current, header_size - 96);    // Skip to the section tables.
 
     section_header_t section_header;
     for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index)
     {
-        file_data.read(section_header);
+        section_header = stream.read<section_header_t>();
         if (strcmp(section_header.name, ".idata") == 0)
             break;
     }
 
     // Skip to the import tables.
-    file_data.seek(section_header.raw_data_offset, file::seek_from::beginning);
+    seekable.seek(seek_from::begin, section_header.raw_data_offset);
 
     // The import tables specify RVAs for import entries, so we'll need the base
     // address of the section in order to locate the imports in the input file.
@@ -243,70 +242,69 @@ bool patch_image(seekable_stream& file_data)
     import_entry_t import_entry;
     while (true)
     {
-        file_data.read(import_entry);
+        import_entry = stream.read<import_entry_t>();
         if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
             return false;
 
-        auto import_entry_position = file_data.position();
-        file_data.seek(section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva, file::seek_from::beginning);
-        auto import_name_position = file_data.position();
+        auto import_entry_position = seekable.position();
+        seekable.seek(seek_from::begin, section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva);
+        auto import_name_position = seekable.position();
         string dll_name;
-        char ch;
-        while ((file_data.read(ch), ch) != '\0')
-            dll_name += ch;
+        for (char ch; (ch = stream.read<char>()) != '\0'; )
+            dll_name.push_back(ch);
         if (_stricmp(dll_name.c_str(), "ddraw.dll") == 0)
         {
-            file_data.set_position(import_name_position);
+            seekable.set_position(import_name_position);
             const char import_name[] = "wcdx.dll";
-            file_data.write(import_name, lengthof(import_name));
+            stream.write(import_name);
             break;
         }
 
-        file_data.set_position(import_entry_position);
+        seekable.set_position(import_entry_position);
     }
 
-    file_data.seek(section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva, file::seek_from::beginning);
+    seekable.seek(seek_from::begin, section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva);
     if (pe_type_signature != OptionalHeader_PE32Signature)
         return false;
 
-    uint32_t lookup;
-    memory_stream::position_type lookup_position;
+    stream_position lookup_position = 0;
     while (true)
     {
-        if (!file_data.read(lookup) || lookup == 0)
+        auto lookup = stream.read<uint32_t>();
+        if (lookup == 0)
             return false;
 
         if ((lookup & 0x80000000) == 0)
         {
-            lookup_position = file_data.position();
-            file_data.seek(section_header.raw_data_offset + lookup - idata_base_rva + 2, file::seek_from::beginning);
-            auto name_position = file_data.position();
+            lookup_position = seekable.position();
+            seekable.seek(seek_from::begin, section_header.raw_data_offset + lookup - idata_base_rva + 2);
+            auto name_position = seekable.position();
 
             string name;
-            char ch;
-            while ((file_data.read(ch), ch) != '\0')
+            for (char ch; (ch = stream.read<char>()) != '\0'; )
                 name += ch;
             if (name == "DirectDrawCreate")
             {
-                file_data.set_position(name_position);
-                file_data.seek(-2);
+                seekable.set_position(name_position - 2);
                 break;
             }
-            file_data.set_position(lookup_position);
+            seekable.set_position(lookup_position);
         }
     }
 
-    file_data.write(uint16_t(0));
-    string_view function_name = "WcdxCreate";
-    file_data.write(function_name.data(), function_name.length() * sizeof(char));
-    file_data.write('\0');
+    if (lookup_position == 0)
+        return false;
 
-    file_data.set_position(lookup_position);
-    file_data.write(0);
+    stream.write(uint16_t(0));
+    const char function_name[] = "WcdxCreate";
+    stream.write(function_name);
+
+    seekable.set_position(lookup_position);
+    stream.write(0);
     return true;
 }
 
-bool apply_dif(seekable_stream& file_data, uint32_t hash)
+bool apply_dif(multi_ref<stream, seekable> file_data, uint32_t hash)
 {
     static const map<uint32_t, uint32_t> diffs =
     {
@@ -322,75 +320,83 @@ bool apply_dif(seekable_stream& file_data, uint32_t hash)
         return false;
 
     resource_stream resource(i->second);
-    string line = read_line(resource);
+    auto line = read_line(resource);
     char tag[] = "This difference file has been created by IDA";
-    if (mismatch(line.begin(), line.end(), begin(tag), end(tag)).second != end(tag) - 1)
+    if (line == nullopt || mismatch(line->begin(), line->end(), begin(tag), end(tag)).second != end(tag) - 1)
         return false;
 
-    while (!resource.at_end())
+    while ((line = read_line(resource)) != nullopt)
     {
-        line = read_line(resource);
-        if (line.empty())
+        if (line->empty())
             continue;
 
-        auto n = line.find(':');
+        auto n = line->find(':');
         if (n == string::npos)
             continue;
-        string_view address_str(line.data(), n);
+        stdext::string_view address_str(line->data(), n);
 
-        n = line.find_first_not_of(' ', n + 1);
+        n = line->find_first_not_of(' ', n + 1);
         if (n == string::npos)
             return false;
-        auto m = line.find(' ', n);
+        auto m = line->find(' ', n);
         if (n == string::npos)
             return false;
-        string_view original_value_str(line.data() + n, m - n);
+        stdext::string_view original_value_str(line->data() + n, m - n);
 
-        n = line.find_first_not_of(' ', m + 1);
+        n = line->find_first_not_of(' ', m + 1);
         if (n == string::npos)
             return false;
-        m = line.find(' ', n);
+        m = line->find(' ', n);
         if (m == string::npos)
-            m = line.length();
-        string_view replacement_value_str(line.data() + n, m - n);
+            m = line->length();
+        stdext::string_view replacement_value_str(line->data() + n, m - n);
 
-        if (line.find_first_not_of(' ', m + 1) != string::npos)
+        if (line->find_first_not_of(' ', m + 1) != string::npos)
             return false;
 
-        if (original_value_str == "FFFFFFFF")
+        if (original_value_str.compare("FFFFFFFF") == 0)
             continue;
 
         uint32_t offset = stoul(address_str, nullptr, 16);
         uint8_t original_value = uint8_t(stoul(original_value_str, nullptr, 16));
         uint8_t replacement_value = uint8_t(stoul(replacement_value_str, nullptr, 16));
 
-        file_data.seek(offset, seekable_stream::seek_from::beginning);
-        uint8_t value;
-        if (!file_data.read(value) || value != original_value)
+        auto& stream = file_data.as<stdext::stream>();
+        auto& seekable = file_data.as<stdext::seekable>();
+        seekable.seek(seek_from::begin, offset);
+        auto value = stream.read<uint8_t>();
+        if (value != original_value)
             return false;
-        file_data.seek(-1);
-        file_data.write(replacement_value);
+        seekable.seek(seek_from::current, -1);
+        stream.write(replacement_value);
     }
 
     return true;
 }
 
-string read_line(seekable_input_stream& is)
+optional<string> read_line(multi_ref<input_stream, seekable> is)
 {
-    auto position = is.position();
-    size_t length = 0;
+    auto& stream = is.as<stdext::input_stream>();
+    auto& seekable = is.as<stdext::seekable>();
+
     char ch;
-    while (is.read(ch) && (ch != '\r') && (ch != '\n'))
+    if (stream.read(&ch, 1) == 0)
+        return nullopt;
+
+    seekable.seek(seek_from::current, -1);
+    auto position = seekable.position();
+    size_t length = 0;
+    while (stream.read(&ch, 1) == 1 && (ch != '\r') && (ch != '\n'))
         ++length;
-    is.set_position(position);
+    seekable.set_position(position);
 
     string line;
     line.reserve(length);
-    while (is.read(ch) && (ch != '\r') && (ch != '\n'))
+    while (stream.read(&ch, 1) == 1 && (ch != '\r') && (ch != '\n'))
         line += ch;
 
-    if ((ch == '\r') && is.read(ch) && (ch != '\n'))
-        is.seek(-1);
+    if ((ch == '\r') && stream.read(&ch, 1) == 1 && (ch != '\n'))
+        seekable.seek(seek_from::current, -1);
 
     return line;
 }

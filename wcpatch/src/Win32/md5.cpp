@@ -4,9 +4,6 @@
 
 #include <string>
 
-using namespace windows;
-using namespace std;
-
 
 md5_hash::md5_hash(const void* data, size_t size)
 {
@@ -29,7 +26,7 @@ md5_hash::md5_hash(const void* data, size_t size)
         throw windows_error();
 
     if (hash_size != sizeof(*this))
-        throw logic_error("Unexpected MD5 hash size: " + to_string(hash_size));
+        throw std::logic_error("Unexpected MD5 hash size: " + std::to_string(hash_size));
 
     sz = sizeof(*this);
     if (!::CryptGetHashParam(hash, HP_HASHVAL, reinterpret_cast<BYTE*>(this), &sz, 0))
@@ -39,7 +36,7 @@ md5_hash::md5_hash(const void* data, size_t size)
 md5_hash::md5_hash(std::initializer_list<uint32_t> elems)
 {
     if (elems.size() != 4)
-        throw invalid_argument("md5_hash must be initialized with four values");
+        throw std::invalid_argument("md5_hash must be initialized with four values");
 
     auto i = begin(elems);
     a = *i++;

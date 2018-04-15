@@ -1,6 +1,8 @@
 #include "common.h"
 #include "wcdx.h"
 
+#include <stdext/utility.h>
+
 #include <algorithm>
 #include <iterator>
 #include <limits>
@@ -12,8 +14,6 @@
 #include <Shlobj.h>
 #include <strsafe.h>
 
-
-using namespace std;
 
 enum
 {
@@ -116,7 +116,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen) : refCount(1), cl
         _com_raise_error(hr);
 
     WcdxColor defColor = { 0, 0, 0, 0xFF };
-    fill(begin(palette), end(palette), defColor);
+    std::fill_n(palette, stdext::lengthof(palette), defColor);
 
     SetFullScreen(IsDebuggerPresent() ? false : fullScreen);
 }
@@ -169,7 +169,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::SetVisible(BOOL visible)
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const WcdxColor entries[256])
 {
-    copy(entries, entries + 256, palette);
+    std::copy_n(entries, 256, palette);
     dirty = true;
     return S_OK;
 }
@@ -186,10 +186,10 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
     RECT rect = { x, y, LONG(x + width), LONG(y + height) };
     RECT clipped =
     {
-        max(rect.left, LONG(0)),
-        max(rect.top, LONG(0)),
-        min(rect.right, LONG(ContentWidth)),
-        min(rect.bottom, LONG(ContentHeight))
+        std::max(rect.left, LONG(0)),
+        std::max(rect.top, LONG(0)),
+        std::min(rect.right, LONG(ContentWidth)),
+        std::min(rect.bottom, LONG(ContentHeight))
     };
 
     auto src = static_cast<const BYTE*>(bits);
@@ -197,7 +197,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
     width = clipped.right - clipped.left;
     for (height = clipped.bottom - clipped.top; height-- > 0; )
     {
-        copy(src, src + width, dest);
+        std::copy_n(src, width, dest);
         src += pitch;
         dest += ContentWidth;
     }
@@ -247,7 +247,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
             auto dest = static_cast<WcdxColor*>(locked.pBits);
             for (int row = 0; row < ContentHeight; ++row)
             {
-                transform(src, src + ContentWidth, dest, [&](BYTE index)
+                std::transform(src, src + ContentWidth, dest, [&](BYTE index)
                 {
                     return palette[index];
                 });
@@ -967,7 +967,7 @@ bool CreateDirectoryRecursive(LPWSTR pathName)
     if (::GetLastError() != ERROR_PATH_NOT_FOUND)
         return false;
 
-    auto i = find(make_reverse_iterator(pathName + wcslen(pathName)), make_reverse_iterator(pathName), L'\\');
+    auto i = std::find(std::make_reverse_iterator(pathName + wcslen(pathName)), std::make_reverse_iterator(pathName), L'\\');
     if (i.base() == pathName)
         return false;
 

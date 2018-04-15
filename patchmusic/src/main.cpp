@@ -4,8 +4,6 @@
 #include <cstddef>
 
 
-using namespace std;
-
 struct chunk_header
 {
     uint32_t start_offset;
@@ -23,7 +21,7 @@ constexpr size_t lengthof(const T (&a)[length])
 }
 
 static void show_usage(const wchar_t* name);
-bool deloop_chunk(filebuf& file, uint32_t offset, const chunk_header& target_chunk);
+bool deloop_chunk(std::filebuf& file, uint32_t offset, const chunk_header& target_chunk);
 
 
 static constexpr uint32_t target_chunk_offsets[] =
@@ -56,15 +54,15 @@ int wmain(int argc, wchar_t* argv[])
 
     if (argc != 2)
     {
-        cerr << "Error: Unrecognized arguments." << endl;
+        std::cerr << "Error: Unrecognized arguments.\n";
         show_usage(argv[0]);
         return EXIT_FAILURE;
     }
 
-    filebuf file;
-    if (file.open(argv[1], ios_base::in | ios_base::out | ios_base::binary) == nullptr)
+    std::filebuf file;
+    if (file.open(argv[1], std::ios_base::in | std::ios_base::out | std::ios_base::binary) == nullptr)
     {
-        wcerr << L"Error: Unable to open file: " << argv[1] << endl;
+        std::wcerr << L"Error: Unable to open file: " << argv[1] << L"\n";
         return EXIT_FAILURE;
     }
 
@@ -77,25 +75,25 @@ int wmain(int argc, wchar_t* argv[])
     return EXIT_SUCCESS;
 }
 
-bool deloop_chunk(filebuf& file, uint32_t offset, const chunk_header& target_chunk)
+bool deloop_chunk(std::filebuf& file, uint32_t offset, const chunk_header& target_chunk)
 {
-    auto position = file.pubseekoff(offset, ios_base::beg);
-    if (position == streampos(streamoff(-1)))
+    auto position = file.pubseekoff(offset, std::ios_base::beg);
+    if (position == std::streampos(std::streamoff(-1)))
     {
-        wcerr << L"Error: Seek error." << endl;
+        std::wcerr << L"Error: Seek error.\n";
         return false;
     }
 
     chunk_header header;
     if (file.sgetn(reinterpret_cast<char*>(&header), sizeof(header)) != sizeof(header))
     {
-        wcerr << L"Error: Unexpected end of file." << endl;
+        std::wcerr << L"Error: Unexpected end of file.\n";
         return false;
     }
 
     if (memcmp(&header, &target_chunk, sizeof(chunk_header)) != 0)
     {
-        wcerr << L"Error: Bytes in stream chunk header do not match expected values." << endl;
+        std::wcerr << L"Error: Bytes in stream chunk header do not match expected values.\n";
         return false;
     }
 
@@ -106,7 +104,7 @@ bool deloop_chunk(filebuf& file, uint32_t offset, const chunk_header& target_chu
     file.pubseekpos(position);
     if (file.sputn(reinterpret_cast<char*>(&header), sizeof(header)) != sizeof(header))
     {
-        wcerr << L"Error: Couldn't write to file." << endl;
+        std::wcerr << L"Error: Couldn't write to file.\n";
         return false;
     }
 
@@ -115,5 +113,5 @@ bool deloop_chunk(filebuf& file, uint32_t offset, const chunk_header& target_chu
 
 void show_usage(const wchar_t* name)
 {
-    wcout << L"Usage: " << name << L" <path-to-missions.str>" << endl;
+    std::wcout << L"Usage: " << name << L" <path-to-missions.str>\n";
 }

@@ -3,6 +3,8 @@
 
 #include <iwcdx.h>
 
+#include <stdext/utility.h>
+
 #include <algorithm>
 #include <memory>
 #include <vector>
@@ -20,14 +22,13 @@ using std::max;
 
 
 using namespace Gdiplus;
-using namespace std;
 
 enum
 {
     WM_APP_RENDER = WM_APP
 };
 
-static unique_ptr<Bitmap> LoadPng(LPCWSTR resource);
+static std::unique_ptr<Bitmap> LoadPng(LPCWSTR resource);
 static void ShowImage(IWcdx* wcdx, Bitmap& image);
 
 static void OnDestroy(HWND window);
@@ -36,7 +37,7 @@ static void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags);
 static void OnRender(HWND window);
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-static vector<unique_ptr<Bitmap>>* Images;
+static std::vector<std::unique_ptr<Bitmap>>* Images;
 static size_t ImageIndex = 0;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCommandLine, int nCmdShow)
@@ -46,13 +47,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
         ULONG_PTR gdiplusToken;
         GdiplusStartupInput gdiStartupInput(nullptr, TRUE, TRUE);
         GdiplusStartupOutput gdiStartupOutput;
-        ::GdiplusStartup(&gdiplusToken, &gdiStartupInput, &gdiStartupOutput);
-        at_scope_exit([&]{ ::GdiplusShutdown(gdiplusToken); });
+        GdiplusStartup(&gdiplusToken, &gdiStartupInput, &gdiStartupOutput);
+        at_scope_exit([&]{ GdiplusShutdown(gdiplusToken); });
         ULONG_PTR gdiplusHookToken;
         gdiStartupOutput.NotificationHook(&gdiplusHookToken);
         at_scope_exit([&]{ gdiStartupOutput.NotificationUnhook(gdiplusHookToken); });
 
-        vector<unique_ptr<Bitmap>> images;
+        std::vector<std::unique_ptr<Bitmap>> images;
         for (int n = 0; n < 10; ++n)
             images.push_back(LoadPng(MAKEINTRESOURCE(IDPNG_SCREEN0 + n)));
         Images = &images;
@@ -85,7 +86,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
     return EXIT_FAILURE;
 }
 
-unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
+std::unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
 {
     HRSRC resourceHandle = ::FindResource(nullptr, resource, L"PNG");
     HGLOBAL resourceGlobal = ::LoadResource(nullptr, resourceHandle);
@@ -96,7 +97,7 @@ unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
     if (stream != nullptr)
     {
         at_scope_exit([&]{ stream->Release(); });
-        return unique_ptr<Bitmap>(new Bitmap(stream));
+        return std::unique_ptr<Bitmap>(new Bitmap(stream));
     }
 
     return nullptr;
@@ -104,7 +105,7 @@ unique_ptr<Bitmap> LoadPng(LPCWSTR resource)
 
 void ShowImage(IWcdx* wcdx, Bitmap& image)
 {
-    vector<BYTE> paletteData(image.GetPaletteSize());
+    std::vector<BYTE> paletteData(image.GetPaletteSize());
     ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
     image.GetPalette(&palette, paletteData.size());
 

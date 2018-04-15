@@ -7,10 +7,6 @@
 #include <map>
 
 
-using namespace stdext;
-using namespace std;
-using namespace windows;
-
 struct resource
 {
     void* data;
@@ -25,10 +21,10 @@ struct resource_stream::impl
     ~impl();
 
     uint32_t id;
-    shared_ptr<resource> res;
+    std::shared_ptr<resource> res;
 
 private:
-    static map<uint32_t, weak_ptr<resource>> loaded_resources;
+    static std::map<uint32_t, std::weak_ptr<resource>> loaded_resources;
 };
 
 
@@ -37,13 +33,13 @@ resource_stream::resource_stream(std::unique_ptr<impl> pimpl) : memory_input_str
 {
 }
 
-resource_stream::resource_stream(uint32_t id) : resource_stream(make_unique<impl>(id))
+resource_stream::resource_stream(uint32_t id) : resource_stream(std::make_unique<impl>(id))
 {
 }
 
 resource_stream::~resource_stream() = default;
 
-map<uint32_t, weak_ptr<resource>> resource_stream::impl::loaded_resources;
+std::map<uint32_t, std::weak_ptr<resource>> resource_stream::impl::loaded_resources;
 
 resource_stream::impl::impl(uint32_t id) : id(id)
 {
@@ -64,8 +60,8 @@ resource_stream::impl::impl(uint32_t id) : id(id)
             throw windows_error();
         if (_res.data == nullptr)
             throw windows_error();
-        res = make_shared<resource>(move(_res));
-        loaded_resources.insert(pair<uint32_t, weak_ptr<resource>>(id, res));
+        res = std::make_shared<resource>(std::move(_res));
+        loaded_resources.insert(std::pair<uint32_t, std::weak_ptr<resource>>(id, res));
     }
     else
         res = i->second.lock();

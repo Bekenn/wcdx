@@ -1,4 +1,3 @@
-#include "common.h"
 #include "wcdx.h"
 
 #include <stdext/utility.h>

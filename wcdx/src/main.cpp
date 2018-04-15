@@ -1,4 +1,4 @@
-#include "common.h"
+#include "platform.h"
 
 HINSTANCE DllInstance;
 

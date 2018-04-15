@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include <WinCrypt.h>
+
 
 md5_hash::md5_hash(const void* data, size_t size)
 {

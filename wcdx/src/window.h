@@ -2,6 +2,8 @@
 #define WINDOW_INCLUDED
 #pragma once
 
+#include "platform.h"
+
 #include <system_error>
 #include <utility>
 

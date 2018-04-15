@@ -1,5 +1,5 @@
 #include "platform.h"
-#include "../res/resources.h"
+#include "res/resources.h"
 
 #include <iwcdx.h>
 

@@ -1,6 +1,6 @@
 #include "resource_stream.h"
 #include "md5.h"
-#include "../res/resources.h"
+#include "res/resources.h"
 
 #include <stdext/file.h>
 #include <stdext/multi.h>

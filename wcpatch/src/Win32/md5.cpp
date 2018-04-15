@@ -1,5 +1,5 @@
 #include "platform.h"
-#include "../md5.h"
+#include "md5.h"
 #include "windows_error.h"
 
 #include <string>

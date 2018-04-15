@@ -1,6 +1,6 @@
 #include "platform.h"
 
-#include "../resource_stream.h"
+#include "resource_stream.h"
 
 #include "windows_error.h"
 

@@ -4,6 +4,7 @@ file(GLOB_RECURSE SOURCES src/* res/*)
 
 add_executable(wcpatch)
 target_link_libraries(wcpatch PRIVATE stdext)
+target_include_directories(wcpatch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} src)
 target_compile_definitions(wcpatch PRIVATE _UNICODE _SCL_SECURE_NO_WARNINGS)
 target_sources(wcpatch PRIVATE ${SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "Source Files" FILES ${SOURCES})

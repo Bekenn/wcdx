@@ -58,13 +58,13 @@ public:
 
 private:
     static ATOM FrameWindowClass();
-    static ATOM ContentWindowClass();
     static LRESULT CALLBACK FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-    static LRESULT CALLBACK ContentWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     void OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight);
     void OnActivate(WORD state, BOOL minimized, HWND other);
+    void OnWindowPosChanged(WINDOWPOS* windowPos);
     void OnNCDestroy();
+    bool OnNCLButtonDblClk(int hittest, POINTS position);
     bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
     bool OnSysCommand(WORD type, SHORT x, SHORT y);
     void OnSizing(DWORD windowEdge, RECT* dragRect);
@@ -73,15 +73,18 @@ private:
     void OnContentMouseMove(DWORD keyState, SHORT x, SHORT y);
     void OnContentMouseLeave();
 
+    HRESULT UpdateMonitor(UINT& adapter);
+    HRESULT RecreateDevice(UINT adapter);
+    HRESULT ResetDevice();
     HRESULT CreateIntermediateSurface();
     void SetFullScreen(bool enabled);
-    void GetContentRect(RECT& contentRect);
+    RECT GetContentRect(RECT clientRect);
     void ConfineCursor();
 
 private:
     ULONG refCount;
-    SmartWindow frameWindow;
-    HWND contentWindow;
+    SmartWindow window;
+    HMONITOR monitor;
     WNDPROC clientWindowProc;
     DWORD frameStyle;
     DWORD frameExStyle;
@@ -96,7 +99,6 @@ private:
     IDirect3DSurface9Ptr surface;
 #pragma warning(pop)
 
-    D3DCAPS9 deviceCaps;
     D3DPRESENT_PARAMETERS presentParams;
 
     WcdxColor palette[256];
@@ -104,6 +106,7 @@ private:
 
     bool fullScreen;
     bool dirty;
+    bool sizeChanged;
     bool mouseOver;
 };
 

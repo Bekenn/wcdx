@@ -153,6 +153,7 @@ void OnRender(HWND window)
 //  ::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
+// Remember: This is an ANSI window procedure!
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
@@ -174,5 +175,5 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break;
     }
 
-    return ::DefWindowProc(hWnd, uMsg, wParam, lParam);
+    return ::DefWindowProcA(hWnd, uMsg, wParam, lParam);
 }

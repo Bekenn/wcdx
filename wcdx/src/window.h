@@ -32,7 +32,7 @@ public:
     }
 
     SmartWindow(
-        LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle,
+        LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle,
         int x, int y, int nWidth, int nHeight,
         HWND hWndParent, HMENU hMenu, HINSTANCE hInstance,
         LPVOID lpParam
@@ -43,7 +43,7 @@ public:
     }
 
     SmartWindow(
-        DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle,
+        DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle,
         int x, int y, int nWidth, int nHeight,
         HWND hWndParent, HMENU hMenu, HINSTANCE hInstance,
         LPVOID lpParam

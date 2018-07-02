@@ -541,9 +541,13 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
         switch (message)
         {
         case WM_NCCREATE:
+            // The client window procedure is an ANSI window procedure, so we need to mangle it
+            // appropriately.  We can do that by passing it through SetWindowLongPtr.
             wcdx = static_cast<Wcdx*>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams);
+            auto wndproc = ::SetWindowLongPtrA(hwnd, GWLP_WNDPROC, LONG_PTR(wcdx->clientWindowProc));
+            wcdx->clientWindowProc = WNDPROC(::SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wndproc));
             ::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(wcdx));
-            return wcdx->clientWindowProc(hwnd, message, wParam, lParam);
+            return ::CallWindowProc(wcdx->clientWindowProc, hwnd, message, wParam, lParam);
         }
     }
     else
@@ -600,7 +604,7 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
             wcdx->OnRender();
             break;
         }
-        return wcdx->clientWindowProc(hwnd, message, wParam, lParam);
+        return ::CallWindowProc(wcdx->clientWindowProc, hwnd, message, wParam, lParam);
     }
 
     return ::DefWindowProc(hwnd, message, wParam, lParam);

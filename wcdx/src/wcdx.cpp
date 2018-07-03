@@ -10,7 +10,10 @@
 #include <io.h>
 #include <fcntl.h>
 
+#pragma warning(push)
+#pragma warning(disable:4091)   // 'typedef ': ignored on left of 'tagGPFIDL_FLAGS' when no variable is declared
 #include <Shlobj.h>
+#pragma warning(pop)
 #include <strsafe.h>
 
 
@@ -19,8 +22,8 @@ enum
     WM_APP_RENDER = WM_APP
 };
 
-static void ConvertTo(LONG& x, LONG& y, const SIZE& size);
-static void ConvertFrom(LONG& x, LONG& y, const SIZE& size);
+static POINT ConvertTo(POINT point, RECT rect);
+static POINT ConvertFrom(POINT point, RECT rect);
 static HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path);
 static HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
 
@@ -40,20 +43,24 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
 
 Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen)
     : refCount(1), monitor(nullptr), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW)
-    , fullScreen(false), dirty(false), sizeChanged(false), mouseOver(false)
+    , fullScreen(false), dirty(false), sizeChanged(false)
 {
-    window = SmartWindow(frameExStyle,
+    // Create the window.
+    auto hwnd = ::CreateWindowEx(frameExStyle,
         reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
         frameStyle,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr, nullptr, DllInstance, this);
-
-    ::GetWindowRect(window, &frameRect);
+    if (hwnd == nullptr)
+        throw std::system_error(::GetLastError(), std::system_category());
+    window.Reset(hwnd, &::DestroyWindow);
 
     // Force 4:3 aspect ratio.
+    ::GetWindowRect(window, &frameRect);
     OnSizing(WMSZ_TOP, &frameRect);
     ::MoveWindow(window, frameRect.left, frameRect.top, frameRect.right - frameRect.left, frameRect.bottom - frameRect.top, FALSE);
 
+    // Initialize D3D.
     d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
 
     // Find the adapter corresponding to the window.
@@ -70,6 +77,8 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen)
 
     SetFullScreen(IsDebuggerPresent() ? false : fullScreen);
 }
+
+Wcdx::~Wcdx() = default;
 
 HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 {
@@ -257,8 +266,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToClient(POINT* point)
     if (!::GetClientRect(window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
-    SIZE size = { viewRect.right, viewRect.bottom };
-    ConvertTo(point->x, point->y, size);
+    *point = ConvertTo(*point, GetContentRect(viewRect));
     return S_OK;
 }
 
@@ -271,8 +279,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromClient(POINT* point)
     if (!::GetClientRect(window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
-    SIZE size = { viewRect.right, viewRect.bottom };
-    ConvertFrom(point->x, point->y, size);
+    *point = ConvertFrom(*point, GetContentRect(viewRect));
     return S_OK;
 }
 
@@ -285,9 +292,9 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToClient(RECT* rect)
     if (!::GetClientRect(window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
-    SIZE size = { viewRect.right, viewRect.bottom };
-    ConvertTo(rect->left, rect->top, size);
-    ConvertTo(rect->right, rect->bottom, size);
+    auto topLeft = ConvertTo({ rect->left, rect->top }, GetContentRect(viewRect));
+    auto bottomRight = ConvertTo({ rect->right, rect->bottom }, GetContentRect(viewRect));
+    *rect = { topLeft.x, topLeft.y, bottomRight.x, bottomRight.y };
     return S_OK;
 }
 
@@ -300,9 +307,9 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromClient(RECT* rect)
     if (!::GetClientRect(window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
-    SIZE size = { viewRect.right, viewRect.bottom };
-    ConvertFrom(rect->left, rect->top, size);
-    ConvertFrom(rect->right, rect->bottom, size);
+    auto topLeft = ConvertFrom({ rect->left, rect->top }, GetContentRect(viewRect));
+    auto bottomRight = ConvertFrom({ rect->right, rect->bottom }, GetContentRect(viewRect));
+    *rect = { topLeft.x, topLeft.y, bottomRight.x, bottomRight.y };
     return S_OK;
 }
 
@@ -508,9 +515,15 @@ HRESULT STDMETHODCALLTYPE Wcdx::SetValue(const wchar_t* keyname, const wchar_t* 
 
 ATOM Wcdx::FrameWindowClass()
 {
-    static ATOM windowClass = 0;
-    if (windowClass == 0)
+    static const ATOM windowClass = []
     {
+        // Create an empty cursor.
+        BYTE and = 0xFF;
+        BYTE xor = 0;
+        auto hcursor = ::CreateCursor(DllInstance, 0, 0, 1, 1, &and, &xor);
+        if (hcursor == nullptr)
+            throw std::system_error(::GetLastError(), std::system_category());
+
         WNDCLASSEX wc =
         {
             sizeof(WNDCLASSEX),
@@ -520,15 +533,15 @@ ATOM Wcdx::FrameWindowClass()
             0,
             DllInstance,
             nullptr,
-            ::LoadCursor(nullptr, IDC_ARROW),
+            hcursor,
             nullptr,
             nullptr,
             L"Wcdx Frame Window",
             nullptr
         };
 
-        windowClass = ::RegisterClassEx(&wc);
-    }
+        return ::RegisterClassEx(&wc);
+    }();
 
     return windowClass;
 }
@@ -588,17 +601,9 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
                 return 0;
             break;
 
-        case WM_MOUSEMOVE:
-            wcdx->OnContentMouseMove(wParam, LOWORD(lParam), HIWORD(lParam));
-            break;
-
         case WM_SIZING:
             wcdx->OnSizing(wParam, reinterpret_cast<RECT*>(lParam));
             return TRUE;
-
-        case WM_MOUSELEAVE:
-            wcdx->OnContentMouseLeave();
-            break;
 
         case WM_APP_RENDER:
             wcdx->OnRender();
@@ -639,7 +644,7 @@ void Wcdx::OnWindowPosChanged(WINDOWPOS* windowPos)
 
 void Wcdx::OnNCDestroy()
 {
-    window.Reset();
+    window.Invalidate();
 }
 
 bool Wcdx::OnNCLButtonDblClk(int hittest, POINTS position)
@@ -755,28 +760,6 @@ void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
 void Wcdx::OnRender()
 {
     Present();
-}
-
-void Wcdx::OnContentMouseMove(DWORD keyState, SHORT x, SHORT y)
-{
-    if (!mouseOver)
-    {
-        mouseOver = true;
-        TRACKMOUSEEVENT tme = 
-        {
-            sizeof(TRACKMOUSEEVENT),
-            TME_LEAVE,
-            window
-        };
-        ::TrackMouseEvent(&tme);
-        ::ShowCursor(FALSE);
-    }
-}
-
-void Wcdx::OnContentMouseLeave()
-{
-    mouseOver = false;
-    ::ShowCursor(TRUE);
 }
 
 HRESULT Wcdx::UpdateMonitor(UINT& adapter)
@@ -923,24 +906,41 @@ void Wcdx::ConfineCursor()
 {
     if (fullScreen)
     {
-        RECT contentRect;
-        ::GetWindowRect(window, &contentRect);
-        ::ClipCursor(&contentRect);
+        union
+        {
+            RECT rect;
+            struct
+            {
+                POINT topLeft;
+                POINT bottomRight;
+            };
+        } content;
+        ::GetClientRect(window, &content.rect);
+        content.rect = GetContentRect(content.rect);
+        ::ClientToScreen(window, &content.topLeft);
+        ::ClientToScreen(window, &content.bottomRight);
+        ::ClipCursor(&content.rect);
     }
     else
         ::ClipCursor(nullptr);
 }
 
-void ConvertTo(LONG& x, LONG& y, const SIZE& size)
+POINT ConvertTo(POINT point, RECT rect)
 {
-    x = ((x * size.cx) / Wcdx::ContentWidth);
-    y = ((y * size.cy) / Wcdx::ContentHeight);
+    return
+    {
+        rect.left + ((point.x * (rect.right - rect.left)) / Wcdx::ContentWidth),
+        rect.top + ((point.y * (rect.bottom - rect.top)) / Wcdx::ContentHeight)
+    };
 }
 
-void ConvertFrom(LONG& x, LONG& y, const SIZE& size)
+POINT ConvertFrom(POINT point, RECT rect)
 {
-    x = size.cx == 0 ? 0 : (x * Wcdx::ContentWidth) / size.cx;
-    y = size.cy == 0 ? 0 : (y * Wcdx::ContentHeight) / size.cy;
+    return
+    {
+        ((point.x - rect.left) * Wcdx::ContentWidth) / (rect.right - rect.left),
+        ((point.y - rect.top) * Wcdx::ContentHeight) / (rect.bottom - rect.top)
+    };
 }
 
 HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)

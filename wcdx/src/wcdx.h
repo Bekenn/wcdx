@@ -2,7 +2,9 @@
 #define WCDX_INCLUDED
 #pragma once
 
-#include "window.h"
+#include "resource.h"
+
+#include "platform.h"
 
 #include <iwcdx.h>
 
@@ -20,6 +22,7 @@ public:
     Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen);
     Wcdx(const Wcdx&) = delete;
     Wcdx& operator = (const Wcdx&) = delete;
+    ~Wcdx();
 
 public:
     // IUnknown
@@ -70,9 +73,6 @@ private:
     void OnSizing(DWORD windowEdge, RECT* dragRect);
     void OnRender();
 
-    void OnContentMouseMove(DWORD keyState, SHORT x, SHORT y);
-    void OnContentMouseLeave();
-
     HRESULT UpdateMonitor(UINT& adapter);
     HRESULT RecreateDevice(UINT adapter);
     HRESULT ResetDevice();
@@ -83,21 +83,16 @@ private:
 
 private:
     ULONG refCount;
-    SmartWindow window;
+    SmartResource<HWND> window;
     HMONITOR monitor;
     WNDPROC clientWindowProc;
     DWORD frameStyle;
     DWORD frameExStyle;
     RECT frameRect;
 
-    // Suppress warnings about IDirect3D9Ptr not being exported -- they're not
-    // directly usable by clients, so it doesn't matter.
-#pragma warning(push)
-#pragma warning(disable:4251)
     IDirect3D9Ptr d3d;
     IDirect3DDevice9Ptr device;
     IDirect3DSurface9Ptr surface;
-#pragma warning(pop)
 
     D3DPRESENT_PARAMETERS presentParams;
 
@@ -107,7 +102,6 @@ private:
     bool fullScreen;
     bool dirty;
     bool sizeChanged;
-    bool mouseOver;
 };
 
 #endif

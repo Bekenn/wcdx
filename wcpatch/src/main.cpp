@@ -62,52 +62,52 @@ int wmain(int argc, wchar_t* argv[])
     at_scope_exit([&]{ system("pause"); });
 #endif
 
-    const wchar_t* input_path = nullptr;
-    const wchar_t* output_path = nullptr;
-    bool headers_only = false;
-
-    for (const wchar_t* const* arg = argv + 1; *arg != nullptr; ++arg)
-    {
-        switch (**arg)
-        {
-        case L'\0':
-            continue;
-
-        case L'-':
-        case L'/':
-            if (wcscmp(*arg + 1, L"headers-only") == 0)
-                headers_only = true;
-            break;
-
-        default:
-            if (input_path == nullptr)
-                input_path = *arg;
-            else if (output_path == nullptr)
-                output_path = *arg;
-            else
-            {
-                show_usage(argv[0]);
-                return EXIT_FAILURE;
-            }
-        }
-    }
-
-    if (input_path == nullptr)
-    {
-        std::cerr << "No input file specified.\n";
-        show_usage(argv[0]);
-        return EXIT_FAILURE;
-    }
-
-    if (output_path == nullptr)
-    {
-        std::cerr << "No output file specified.\n";
-        show_usage(argv[0]);
-        return EXIT_FAILURE;
-    }
-
     try
     {
+        const wchar_t* input_path = nullptr;
+        const wchar_t* output_path = nullptr;
+        bool headers_only = false;
+
+        for (const wchar_t* const* arg = argv + 1; *arg != nullptr; ++arg)
+        {
+            switch (**arg)
+            {
+            case L'\0':
+                continue;
+
+            case L'-':
+            case L'/':
+                if (wcscmp(*arg + 1, L"headers-only") == 0)
+                    headers_only = true;
+                break;
+
+            default:
+                if (input_path == nullptr)
+                    input_path = *arg;
+                else if (output_path == nullptr)
+                    output_path = *arg;
+                else
+                {
+                    show_usage(argv[0]);
+                    return EXIT_FAILURE;
+                }
+            }
+        }
+
+        if (input_path == nullptr)
+        {
+            std::cerr << "No input file specified.\n";
+            show_usage(argv[0]);
+            return EXIT_FAILURE;
+        }
+
+        if (output_path == nullptr)
+        {
+            std::cerr << "No output file specified.\n";
+            show_usage(argv[0]);
+            return EXIT_FAILURE;
+        }
+
         // Read the input file into an in-memory buffer.
         std::vector<uint8_t> file_buffer;
         {

@@ -1,469 +1,535 @@
+#include "dsound_error.h"
+
+#include <stdext/file.h>
+#include <stdext/multi.h>
+#include <stdext/utility.h>
+
 #include <algorithm>
-#include <fstream>
+#include <filesystem>
 #include <iostream>
-#include <iterator>
-#include <string>
+#include <sstream>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include <cassert>
 #include <cstdlib>
 #include <cstddef>
 
 #define NOMINMAX
 #define INITGUID
+#include <Windows.h>
 #include <dsound.h>
 #include <cguid.h>
 #include <comip.h>
 #include <comdef.h>
 
 
-#pragma warning(disable: 4838)  // narrowing conversions
-
-enum stream_archive
+namespace
 {
-    preflight, postflight, mission
-};
+    enum stream_archive
+    {
+        preflight, postflight, mission
+    };
 
-struct game_track_desc
-{
-    stream_archive archive;
-    uint8_t track;
-};
+    struct game_trigger_desc
+    {
+        stream_archive archive;
+        uint8_t trigger;
+    };
 
-struct stream_file_header
-{
-    uint32_t magic;
-    uint32_t version;
-    uint8_t channels;
-    uint8_t bits_per_sample;
-    uint16_t sample_rate;
-    uint32_t buffer_size;
-    uint32_t reserved1;
-    uint32_t chunk_headers_offset;
-    uint32_t chunk_count;
-    uint32_t chunk_link_offset;
-    uint32_t chunk_link_count;
-    uint32_t track_link_offset;
-    uint32_t track_link_count;
-    uint32_t file_buffer_size;
-    uint32_t thing4_offset;
-    uint32_t thing4_count;
-    uint32_t thing5_offset;
-    uint32_t thing5_count;
-    uint32_t thing6_offset;
-    uint32_t thing6_count;
-    uint8_t reserved2[32];
-};
+    struct stream_file_header
+    {
+        uint32_t magic;
+        uint32_t version;
+        uint8_t channels;
+        uint8_t bits_per_sample;
+        uint16_t sample_rate;
+        uint32_t buffer_size;
+        uint32_t reserved1;
+        uint32_t chunk_headers_offset;
+        uint32_t chunk_count;
+        uint32_t chunk_link_offset;
+        uint32_t chunk_link_count;
+        uint32_t trigger_link_offset;
+        uint32_t trigger_link_count;
+        uint32_t file_buffer_size;
+        uint32_t thing4_offset;
+        uint32_t thing4_count;
+        uint32_t thing5_offset;
+        uint32_t thing5_count;
+        uint32_t thing6_offset;
+        uint32_t thing6_count;
+        uint8_t reserved2[32];
+    };
 
-struct chunk_header
-{
-    uint32_t start_offset;
-    uint32_t end_offset;
-    uint32_t track_link_count;
-    uint32_t track_link_index;
-    uint32_t chunk_link_count;
-    uint32_t chunk_link_index;
-};
+    struct chunk_header
+    {
+        uint32_t start_offset;
+        uint32_t end_offset;
+        uint32_t trigger_link_count;
+        uint32_t trigger_link_index;
+        uint32_t chunk_link_count;
+        uint32_t chunk_link_index;
+    };
 
-#pragma pack(push)
-#pragma pack(1)
-struct stream_chunk_link
-{
-    uint8_t intensity;
-    uint32_t chunk_index;
-};
+    #pragma pack(push)
+    #pragma pack(1)
+    struct stream_chunk_link
+    {
+        uint8_t intensity;
+        uint32_t chunk_index;
+    };
 
-struct stream_track_link
-{
-    uint8_t track;
-    uint32_t chunk_index;
-};
-#pragma pack(pop)
+    struct stream_trigger_link
+    {
+        uint8_t trigger;
+        uint32_t chunk_index;
+    };
+    #pragma pack(pop)
 
-_COM_SMARTPTR_TYPEDEF(IDirectSound8, IID_IDirectSound8);
-_COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer, IID_IDirectSoundBuffer);
-_COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer8, IID_IDirectSoundBuffer8);
-_COM_SMARTPTR_TYPEDEF(IDirectSoundNotify8, IID_IDirectSoundNotify8);
+    class usage_error : public std::runtime_error
+    {
+        using runtime_error::runtime_error;
+    };
 
-template <typename T, size_t length>
-constexpr size_t lengthof(const T (&arr)[length])
-{
-    return length;
+    _COM_SMARTPTR_TYPEDEF(IDirectSound8, IID_IDirectSound8);
+    _COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer, IID_IDirectSoundBuffer);
+    _COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer8, IID_IDirectSoundBuffer8);
+    _COM_SMARTPTR_TYPEDEF(IDirectSoundNotify8, IID_IDirectSoundNotify8);
+
+    class dsound_player
+    {
+    public:
+        explicit dsound_player();
+
+    public:
+        void load(stdext::multi_ref<stdext::input_stream, stdext::seekable> stream);
+        void play(uint8_t trigger, uint8_t intensity);
+
+    private:
+        DWORD buffer_size_available();
+        void stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t trigger, uint8_t intensity, uint8_t* p, size_t length);
+        uint32_t next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity);
+
+    private:
+        stdext::multi_ptr<stdext::input_stream, stdext::seekable> _stream;
+        stream_file_header _file_header;
+
+        std::vector<chunk_header> _chunks;
+        std::vector<stream_chunk_link> _chunk_links;
+        std::vector<stream_trigger_link> _track_links;
+
+        IDirectSound8Ptr _ds8;
+        IDirectSoundBufferPtr _dsbuffer_primary;
+        IDirectSoundBuffer8Ptr _dsbuffer8;
+        HANDLE _position_event;
+    };
+
+    void show_usage(const wchar_t* invocation);
+    std::string to_mbstring(const wchar_t* str);
+
+    constexpr auto end_of_track = uint32_t(-1);
+    constexpr auto no_trigger = uint8_t(-1);
+
+    constexpr const wchar_t* stream_filenames[]
+    {
+        L"STREAMS\\PREFLITE.STR",
+        L"STREAMS\\POSFLITE.STR",
+        L"STREAMS\\MISSION.STR"
+    };
+
+    // Maps from a track number to a stream archive and trigger number
+    // See StreamLoadTrack and GetStreamTrack in Wing1.i64
+    constexpr game_trigger_desc track_map[] =
+    {
+        { stream_archive::mission, no_trigger },    // 0 - Combat 1
+        { stream_archive::mission, no_trigger },    // 1 - Combat 2
+        { stream_archive::mission, no_trigger },    // 2 - Combat 3
+        { stream_archive::mission, no_trigger },    // 3 - Combat 4
+        { stream_archive::mission, no_trigger },    // 4 - Combat 5
+        { stream_archive::mission, no_trigger },    // 5 - Combat 6
+        { stream_archive::mission, 6 },             // 6 - Victorious combat
+        { stream_archive::mission, 7 },             // 7 - Tragedy
+        { stream_archive::mission, 8 },             // 8 - Dire straits
+        { stream_archive::mission, 9 },             // 9 - Scratch one fighter
+        { stream_archive::mission, 10 },            // 10 - Defeated fleeing enemy
+        { stream_archive::mission, 11 },            // 11 - Wingman death
+        { stream_archive::mission, no_trigger },    // 12 - Returning defeated
+        { stream_archive::mission, no_trigger },    // 13 - Returning successful
+        { stream_archive::mission, no_trigger },    // 14 - Returning jubilant
+        { stream_archive::mission, no_trigger },    // 15 - Mission 1
+        { stream_archive::mission, no_trigger },    // 16 - Mission 2
+        { stream_archive::mission, no_trigger },    // 17 - Mission 3
+        { stream_archive::mission, no_trigger },    // 18 - Mission 4
+        { stream_archive::preflight, no_trigger },  // 19 - OriginFX (actually, fanfare)
+        { stream_archive::preflight, 1 },           // 20 - Arcade Mission
+        { stream_archive::preflight, 4 },           // 21 - Arcade Victory
+        { stream_archive::preflight, 3 },           // 22 - Arcade Death
+        { stream_archive::preflight, no_trigger },  // 23 - Fanfare
+        { stream_archive::preflight, 5 },           // 24 - Halcyon's Office 1
+        { stream_archive::preflight, 6 },           // 25 - Briefing
+        { stream_archive::preflight, 7 },           // 26 - Briefing Dismissed
+        { stream_archive::mission, 27 },            // 27 - Scramble
+        { stream_archive::postflight, no_trigger }, // 28 - Landing
+        { stream_archive::postflight, 0, },         // 29 - Damage Assessment
+        { stream_archive::preflight, 0 },           // 30 - Rec Room
+        { stream_archive::mission, 31 },            // 31 - Eject
+        { stream_archive::mission, 32 },            // 32 - Death
+        { stream_archive::postflight, 2 },          // 33 - debriefing (successful)
+        { stream_archive::postflight, 1 },          // 34 - debriefing (failed)
+        { stream_archive::preflight, 2 },           // 35 - barracks
+        { stream_archive::postflight, 3 },          // 36 - Halcyon's Office / Briefing 2
+        { stream_archive::postflight, 4 },          // 37 - medal (valor?)
+        { stream_archive::postflight, 5 },          // 38 - medal (golden sun?)
+        { stream_archive::postflight, 7 },          // 39 - another medal
+        { stream_archive::postflight, 6 },          // 40 - big medal
+    };
 }
 
-static constexpr auto end_of_track = uint32_t(-1);
-static constexpr auto flight_intensity = 25;
-
-static void load_track(unsigned track);
-static void play_track(unsigned track);
-
-static uint32_t chunk_size(const chunk_header& chunk);
-static DWORD buffer_size_available();
-static void stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t tag, char* p, size_t length);
-static uint32_t next_chunk_index(uint32_t chunk_index, uint8_t next_track, uint8_t intensity);
-
-static constexpr const char* stream_filenames[]
+int wmain(int argc, wchar_t* argv[])
 {
-    "STREAMS\\PREFLITE.STR",
-    "STREAMS\\POSFLITE.STR",
-    "STREAMS\\MISSION.STR"
-};
+    std::wstring invocation = argc > 0 ? std::filesystem::path(argv[0]).filename() : "wcjukebox";
 
-// Maps from a game track number to a stream track number
-// See StreamLoadTrack and GetStreamTrack in Wing1.i64
-static const game_track_desc track_map[] =
-{
-    { stream_archive::mission, 5 },         // 0 - Escort Mission
-    { stream_archive::mission, 7 },         // 1 - Wingman Lost
-    { stream_archive::mission, 7 },         // 2 - Wingman Lost (again, same as 1)
-    { stream_archive::mission, 8 },         // 3 - Dire Straits
-    { stream_archive::mission, 9 },         // 4 - Momentary Victory
-    { stream_archive::mission, 6 },         // 5 - Successful Combat
-    // 6-11 are direct links to triggers, should look at actual data
-    { stream_archive::mission, 15 },        // 6 - Escort Mission (trigger)
-    { stream_archive::mission, 13 },        // 7 - Escort Mission (trigger)
-    { stream_archive::mission, 16 },        // 8 - Escort Mission (trigger)
-    { stream_archive::mission, 14 },        // 9 - Escort Mission (trigger)
-    { stream_archive::mission, 17 },        // 10 - Escort Mission (trigger)
-    { stream_archive::mission, 18 },        // 11 - Escort Mission (trigger)
-    // end triggers
-    { stream_archive::mission, 10 },        // 12 - Defeated Fleeing Enemy
-    { stream_archive::mission, 12 },        // 13 - Escort Mission (again)
-    { stream_archive::mission, 11 },        // 14 - Tragedy
-    { stream_archive::mission, 4 },         // 15 - Escort Mission (again)
-    { stream_archive::mission, 3 },         // 16 - Escort Mission (again)
-    { stream_archive::mission, 1 },         // 17 - Escort Mission (again)
-    { stream_archive::mission, 2 },         // 18 - Escort Mission (again)
-    { stream_archive::preflight, 4 },       // 19 - OriginFX (actually, Arcade Victory)
-    { stream_archive::preflight, 1 },       // 20 - Arcade Mission
-    { stream_archive::preflight, 4 },       // 21 - Arcade Victory
-    { stream_archive::preflight, 3 },       // 22 - Arcade Death
-    { stream_archive::preflight, -1 },      // 23 - Fanfare
-    { stream_archive::preflight, 5 },       // 24 - Grim Briefing
-    { stream_archive::preflight, 6 },       // 25 - Normal Briefing
-    { stream_archive::preflight, 7 },       // 26 - Briefing Dismissed
-    { stream_archive::mission, -1 },        // 27 - Escort Mission (trigger)
-    { stream_archive::postflight, -1, },    // 28 - landing
-    { stream_archive::postflight, 0, },     // 29 - damage assessment
-    { stream_archive::preflight, 0 },       // 30 - rec room
-    { stream_archive::mission, 19 },        // 31 - Escort Mission (trigger)
-    { stream_archive::mission, 20 },        // 32 - Escort Mission (trigger)
-    { stream_archive::postflight, 2 },      // 33 - debriefing (successful)
-    { stream_archive::postflight, 1 },      // 34 - debriefing (failed)
-    { stream_archive::preflight, 2 },       // 35 - barracks
-    { stream_archive::postflight, 3 },      // 36 - colonel halcyon's office
-    { stream_archive::postflight, 4 },      // 37 - medal (valor?)
-    { stream_archive::postflight, 5 },      // 38 - medal (yellow sun?)
-    { stream_archive::postflight, 7 },      // 39 - another medal
-    { stream_archive::postflight, 6 },      // 40 - big medal
-};
-
-static std::filebuf stream_file;
-static stream_file_header file_header;
-
-static std::vector<chunk_header> chunks;
-static std::vector<stream_chunk_link> chunk_links;
-static std::vector<stream_track_link> track_links;
-
-static IDirectSound8Ptr ds8;
-static IDirectSoundBufferPtr dsbuffer_primary;
-static IDirectSoundBuffer8Ptr dsbuffer8;
-static HANDLE position_event;
-
-
-int main(int argc, char* argv[])
-{
-    if (argc == 1)
+    try
     {
-        std::cout << "Usage: " << argv[0] << " <tracknum>\n";
+        if (argc == 1)
+        {
+            show_usage(invocation.c_str());
+            return EXIT_SUCCESS;
+        }
+
+        if (argc != 2)
+            throw usage_error("Too many arguments.");
+
+        dsound_player player;
+        wchar_t* end;
+        auto track = int(wcstol(argv[1], &end, 10));
+        if (*end != '\0')
+        {
+            std::ostringstream message;
+            message << "Unrecognized argument: " << to_mbstring(argv[1]);
+            throw usage_error(std::move(message).str());
+        }
+
+        if (track < 0 || unsigned(track) >= stdext::lengthof(track_map))
+        {
+            std::ostringstream message;
+            message << "Track must be between 0 and " << stdext::lengthof(track_map) - 1 << '.';
+            throw usage_error(std::move(message).str());
+        }
+
+        auto stream_name = stream_filenames[track_map[track].archive];
+        stdext::file_input_stream stream(stream_name);
+        player.load(stream);
+
+        uint8_t trigger = track_map[track].trigger;
+        uint8_t intensity = 15;
+        if (track_map[track].archive == stream_archive::mission && trigger == no_trigger)
+            intensity = uint8_t(track);
+        player.play(trigger, intensity);
+
         return EXIT_SUCCESS;
     }
-
-    if (argc != 2)
+    catch (const usage_error& e)
     {
-        std::cerr << "Bad input.\n";
-        return EXIT_FAILURE;
+        std::cerr << "Error: " << e.what() << '\n';
+        show_usage(invocation.c_str());
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error: " << e.what() << '\n';
+    }
+    catch (...)
+    {
+        std::cerr << "Unknown error\n";
     }
 
-    // DirectSound needs a window handle for SetCooperativeLevel (nullptr doesn't work).
-    auto window = ::CreateWindow(L"BUTTON", L"Hidden DirectSound Window", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr);
-    auto hr = ::DirectSoundCreate8(&DSDEVID_DefaultPlayback, &ds8, nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't initialize DirectSound.\n";
-        return EXIT_FAILURE;
-    }
-
-    hr = ds8->SetCooperativeLevel(window, DSSCL_PRIORITY);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't set DirectSound cooperative level.\n";
-        return EXIT_FAILURE;
-    }
-
-    DSBUFFERDESC desc =
-    {
-        sizeof(desc),
-        DSBCAPS_PRIMARYBUFFER,
-        0, 0, nullptr,
-        DS3DALG_DEFAULT
-    };
-
-    hr = ds8->CreateSoundBuffer(&desc, &dsbuffer_primary, nullptr);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't create DirectSound primary buffer.\n";
-        return EXIT_FAILURE;
-    }
-
-    auto track = atoi(argv[1]);
-    load_track(track);
-    play_track(track);
+    return EXIT_FAILURE;
 }
 
-void load_track(unsigned track)
+namespace
 {
-    const char* stream_name = stream_filenames[track_map[track].archive];
-
-    if (stream_name == nullptr)
-        return;
-
-    if (stream_file.open(stream_name, std::ios_base::binary | std::ios_base::in) == nullptr)
-        return;
-
-    stream_file.sgetn(reinterpret_cast<char*>(&file_header), sizeof(file_header));
-
-    chunks.resize(file_header.chunk_count);
-    stream_file.pubseekoff(file_header.chunk_headers_offset, std::ios_base::beg);
-    stream_file.sgetn(reinterpret_cast<char*>(chunks.data()), chunks.size() * sizeof(chunk_header));
-
-    chunk_links.resize(file_header.chunk_link_count);
-    stream_file.pubseekoff(file_header.chunk_link_offset, std::ios_base::beg);
-    stream_file.sgetn(reinterpret_cast<char*>(chunk_links.data()), chunk_links.size() * sizeof(stream_chunk_link));
-
-    track_links.resize(file_header.track_link_count);
-    stream_file.pubseekoff(file_header.track_link_offset, std::ios_base::beg);
-    stream_file.sgetn(reinterpret_cast<char*>(track_links.data()), track_links.size() * sizeof(stream_track_link));
-
-    PCMWAVEFORMAT format =
+    void show_usage(const wchar_t* invocation)
     {
-        WAVE_FORMAT_PCM,
-        file_header.channels,
-        file_header.sample_rate,
-        file_header.sample_rate * file_header.channels * (file_header.bits_per_sample / 8),
-        file_header.channels * (file_header.bits_per_sample / 8),
-        file_header.bits_per_sample
-    };
-
-    auto hr = dsbuffer_primary->SetFormat(reinterpret_cast<LPWAVEFORMATEX>(&format));
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't set primary buffer output format.\n";
-        exit(EXIT_FAILURE);
+        std::wcout << L"Usage: " << invocation << L" <tracknum>\n";
     }
 
-    DSBUFFERDESC desc =
+    std::string to_mbstring(const wchar_t* str)
     {
-        sizeof(desc),
-        DSBCAPS_GETCURRENTPOSITION2 | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLPOSITIONNOTIFY,
-        file_header.buffer_size,
-        0,
-        reinterpret_cast<WAVEFORMATEX*>(&format),
-        DS3DALG_DEFAULT
-    };
+        std::mbstate_t state = {};
+        auto length = std::wcsrtombs(nullptr, &str, 0, &state);
+        if (length == size_t(-1))
+            throw std::runtime_error("Unicode error");
 
-    IDirectSoundBufferPtr dsbuffer;
-    hr = ds8->CreateSoundBuffer(&desc, &dsbuffer, nullptr);
-    dsbuffer8 = std::move(dsbuffer);
-    if (FAILED(hr) || dsbuffer8 == nullptr)
-    {
-        std::cerr << "Couldn't create sound buffer.\n";
-        exit(EXIT_FAILURE);
+        std::string result(length, '\0');
+        std::wcsrtombs(result.data(), &str, length, &state);
+        return result;
     }
 
-    auto notify = IDirectSoundNotify8Ptr(dsbuffer8);
-    if (notify == nullptr)
+    dsound_player::dsound_player()
     {
-        std::cerr << "Couldn't create Notify interface.\n";
-        exit(EXIT_FAILURE);
-    }
+        // DirectSound needs a window handle for SetCooperativeLevel (nullptr doesn't work).
+        auto window = ::CreateWindow(L"BUTTON", L"Hidden DirectSound Window", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr);
+        auto hr = ::DirectSoundCreate8(&DSDEVID_DefaultPlayback, &_ds8, nullptr);
+        if (FAILED(hr))
+            throw std::system_error(hr, dsound_category());
 
-    position_event = ::CreateEvent(nullptr, TRUE, FALSE, nullptr);
-    if (position_event == nullptr)
-    {
-        std::cerr << "Couldn't create event object.\n";
-        exit(EXIT_FAILURE);
-    }
+        hr = _ds8->SetCooperativeLevel(window, DSSCL_PRIORITY);
+        if (FAILED(hr))
+            throw std::system_error(hr, dsound_category());
 
-    DSBPOSITIONNOTIFY positions[] =
-    {
-        { 0, position_event },
-        { file_header.buffer_size / 2, position_event },
-    };
-    hr = notify->SetNotificationPositions(lengthof(positions), positions);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't set notification positions.\n";
-        exit(EXIT_FAILURE);
-    }
-}
-
-void play_track(unsigned track)
-{
-    auto stream_track = track_map[track].track;
-    auto index = next_chunk_index(0, stream_track, flight_intensity);
-    if (index == end_of_track)
-        return;
-
-    stream_track = -1;
-
-    const chunk_header* chunk = &chunks[index];
-    uint32_t chunk_offset = 0;
-
-    void* buffer;
-    DWORD size;
-    auto hr = dsbuffer8->Lock(0, file_header.buffer_size, &buffer, &size, nullptr, nullptr, 0);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't lock buffer.\n";
-        exit(EXIT_FAILURE);
-    }
-    stream_chunks(chunk, chunk_offset, stream_track, static_cast<char*>(buffer), size);
-    dsbuffer8->Unlock(buffer, size, nullptr, 0);
-
-    hr = dsbuffer8->Play(0, 0, DSBPLAY_LOOPING);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't play stream.\n";
-        exit(EXIT_FAILURE);
-    }
-
-    // Consume one event because we have two full sections in the buffer.
-    ::WaitForSingleObject(position_event, INFINITE);
-    ::ResetEvent(position_event);
-
-    bool done = false;
-    while (!done)
-    {
-        auto wait_result = ::WaitForSingleObject(position_event, INFINITE);
-        if (wait_result == WAIT_FAILED)
+        DSBUFFERDESC desc =
         {
-            std::cerr << "Wait failed.\n";
+            sizeof(desc),
+            DSBCAPS_PRIMARYBUFFER,
+            0, 0, nullptr,
+            DS3DALG_DEFAULT
+        };
+
+        hr = _ds8->CreateSoundBuffer(&desc, &_dsbuffer_primary, nullptr);
+        if (FAILED(hr))
+            throw std::system_error(hr, dsound_category());
+    }
+
+    void dsound_player::load(stdext::multi_ref<stdext::input_stream, stdext::seekable> stream)
+    {
+        _stream = &stream;
+        auto& in = stream.as<stdext::input_stream>();
+        auto& seeker = stream.as<stdext::seekable>();
+
+        _file_header = in.read<stream_file_header>();
+
+        _chunks.resize(_file_header.chunk_count);
+        seeker.seek(stdext::seek_from::begin, _file_header.chunk_headers_offset);
+        in.read(_chunks.data(), _chunks.size());
+
+        _chunk_links.resize(_file_header.chunk_link_count);
+        seeker.seek(stdext::seek_from::begin, _file_header.chunk_link_offset);
+        in.read(_chunk_links.data(), _chunk_links.size());
+
+        _track_links.resize(_file_header.trigger_link_count);
+        seeker.seek(stdext::seek_from::begin, _file_header.trigger_link_offset);
+        in.read(_track_links.data(), _track_links.size());
+
+        PCMWAVEFORMAT format =
+        {
+            WAVE_FORMAT_PCM,
+            _file_header.channels,
+            _file_header.sample_rate,
+            DWORD(_file_header.sample_rate * _file_header.channels * (_file_header.bits_per_sample / 8)),
+            WORD(_file_header.channels * (_file_header.bits_per_sample / 8)),
+            _file_header.bits_per_sample
+        };
+
+        HRESULT hr = _dsbuffer_primary->SetFormat(reinterpret_cast<LPWAVEFORMATEX>(&format));
+        if (FAILED(hr))
+        {
+            std::cerr << "Couldn't set primary buffer output format.\n";
             exit(EXIT_FAILURE);
         }
-        ::ResetEvent(position_event);
 
-        DWORD play, write;
-        dsbuffer8->GetCurrentPosition(&play, &write);
-        auto midpoint = file_header.buffer_size / 2;
-        auto buffer_offset = play < midpoint ? midpoint : 0;
-        size = buffer_offset == 0 ? midpoint : file_header.buffer_size - midpoint;
-        dsbuffer8->Lock(buffer_offset, size, &buffer, &size, nullptr, nullptr, 0);
-        if (chunk == nullptr)
+        DSBUFFERDESC desc =
         {
-            memset(buffer, 0, size);
-            done = true;
+            sizeof(desc),
+            DSBCAPS_GETCURRENTPOSITION2 | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLPOSITIONNOTIFY,
+            _file_header.buffer_size,
+            0,
+            reinterpret_cast<WAVEFORMATEX*>(&format),
+            DS3DALG_DEFAULT
+        };
+
+        IDirectSoundBufferPtr dsbuffer;
+        hr = _ds8->CreateSoundBuffer(&desc, &dsbuffer, nullptr);
+        _dsbuffer8 = std::move(dsbuffer);
+        if (FAILED(hr) || _dsbuffer8 == nullptr)
+        {
+            std::cerr << "Couldn't create sound buffer.\n";
+            exit(EXIT_FAILURE);
         }
-        else
-            stream_chunks(chunk, chunk_offset, stream_track, static_cast<char*>(buffer), size);
-        dsbuffer8->Unlock(buffer, size, nullptr, 0);
-    }
 
-    ::WaitForSingleObject(position_event, INFINITE);
-    ::ResetEvent(position_event);
-    dsbuffer8->Stop();
-}
-
-DWORD buffer_size_available()
-{
-    DWORD play_cursor;
-    DWORD write_cursor;
-    auto hr = dsbuffer8->GetCurrentPosition(&play_cursor, &write_cursor);
-    if (FAILED(hr))
-    {
-        std::cerr << "Couldn't get buffer size.\n";
-        exit(EXIT_FAILURE);
-    }
-
-    if (play_cursor >= write_cursor)
-        return play_cursor - write_cursor;
-    return file_header.buffer_size - write_cursor + play_cursor;
-}
-
-uint32_t chunk_size(const chunk_header& chunk)
-{
-    return chunk.end_offset - chunk.start_offset;
-}
-
-void stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t next_track, char* p, size_t length)
-{
-    while (length != 0)
-    {
-        stream_file.pubseekoff(chunk->start_offset + chunk_offset, std::ios_base::beg);
-        auto bytes = std::min(chunk_size(*chunk) - chunk_offset, length);
-        stream_file.sgetn(p, bytes);
-        p += bytes;
-        length -= bytes;
-        chunk_offset += bytes;
-        if (chunk_offset == chunk_size(*chunk))
+        auto notify = IDirectSoundNotify8Ptr(_dsbuffer8);
+        if (notify == nullptr)
         {
-            chunk_offset = 0;
+            std::cerr << "Couldn't create Notify interface.\n";
+            exit(EXIT_FAILURE);
+        }
 
-            auto index = next_chunk_index(chunk - &chunks.front(), next_track, flight_intensity);
-            if (index == end_of_track)
+        _position_event = ::CreateEvent(nullptr, TRUE, FALSE, nullptr);
+        if (_position_event == nullptr)
+        {
+            std::cerr << "Couldn't create event object.\n";
+            exit(EXIT_FAILURE);
+        }
+
+        DSBPOSITIONNOTIFY positions[] =
+        {
+            { 0, _position_event },
+            { _file_header.buffer_size / 2, _position_event },
+        };
+        hr = notify->SetNotificationPositions(stdext::lengthof(positions), positions);
+        if (FAILED(hr))
+        {
+            std::cerr << "Couldn't set notification positions.\n";
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    void dsound_player::play(uint8_t trigger, uint8_t intensity)
+    {
+        auto index = next_chunk_index(0, trigger, intensity);
+        if (index == end_of_track)
+            return;
+
+        trigger = no_trigger;
+
+        const chunk_header* chunk = &_chunks[index];
+        uint32_t chunk_offset = 0;
+
+        uint8_t* buffer;
+        DWORD size;
+        auto hr = _dsbuffer8->Lock(0, _file_header.buffer_size, reinterpret_cast<LPVOID*>(&buffer), &size, nullptr, nullptr, 0);
+        if (FAILED(hr))
+        {
+            std::cerr << "Couldn't lock buffer.\n";
+            exit(EXIT_FAILURE);
+        }
+        stream_chunks(chunk, chunk_offset, trigger, intensity, buffer, size);
+        _dsbuffer8->Unlock(buffer, size, nullptr, 0);
+
+        hr = _dsbuffer8->Play(0, 0, DSBPLAY_LOOPING);
+        if (FAILED(hr))
+        {
+            std::cerr << "Couldn't play stream.\n";
+            exit(EXIT_FAILURE);
+        }
+
+        // Consume one event because we have two full sections in the buffer.
+        ::WaitForSingleObject(_position_event, INFINITE);
+        ::ResetEvent(_position_event);
+
+        bool done = false;
+        while (!done)
+        {
+            auto wait_result = ::WaitForSingleObject(_position_event, INFINITE);
+            if (wait_result == WAIT_FAILED)
             {
-                chunk = nullptr;
-                memset(p, 0, length);
-                return;
+                std::cerr << "Wait failed.\n";
+                exit(EXIT_FAILURE);
             }
+            ::ResetEvent(_position_event);
 
-            chunk = &chunks[index];
+            DWORD play, write;
+            _dsbuffer8->GetCurrentPosition(&play, &write);
+            auto midpoint = _file_header.buffer_size / 2;
+            auto buffer_offset = play < midpoint ? midpoint : 0;
+            size = buffer_offset == 0 ? midpoint : _file_header.buffer_size - midpoint;
+            _dsbuffer8->Lock(buffer_offset, size, reinterpret_cast<LPVOID*>(&buffer), &size, nullptr, nullptr, 0);
+            if (chunk == nullptr)
+            {
+                std::fill_n(buffer, size, 0);
+                done = true;
+            }
+            else
+                stream_chunks(chunk, chunk_offset, trigger, intensity, buffer, size);
+            _dsbuffer8->Unlock(buffer, size, nullptr, 0);
         }
-    }
-}
 
-uint32_t next_chunk_index(uint32_t chunk_index, uint8_t next_track, uint8_t intensity)
-{
-    const auto& chunk = chunks[chunk_index];
-    auto track_link_first = begin(track_links) + chunk.track_link_index;
-    auto track_link_last = track_link_first + chunk.track_link_count;
-    for (; track_link_first != track_link_last; ++track_link_first)
+        ::WaitForSingleObject(_position_event, INFINITE);
+        ::ResetEvent(_position_event);
+        _dsbuffer8->Stop();
+    }
+
+    DWORD dsound_player::buffer_size_available()
     {
-        switch (track_link_first->track)
+        DWORD play_cursor;
+        DWORD write_cursor;
+        auto hr = _dsbuffer8->GetCurrentPosition(&play_cursor, &write_cursor);
+        if (FAILED(hr))
         {
-        case 64:
-            std::cout << "End of stream.\n";
-            return uint32_t(-1);
-        case 65:
-            std::cout << "Go to prior track.\n";
-            return uint32_t(-1);
-        default:
-            if (track_link_first->track == next_track)
-                return track_link_first->chunk_index;
-            break;
+            std::cerr << "Couldn't get buffer size.\n";
+            exit(EXIT_FAILURE);
         }
+
+        if (play_cursor >= write_cursor)
+            return play_cursor - write_cursor;
+        return _file_header.buffer_size - write_cursor + play_cursor;
     }
 
-    auto chunk_link_first = begin(chunk_links) + chunk.chunk_link_index;
-    auto chunk_link_last = chunk_link_first + chunk.chunk_link_count;
-    auto closest_intensity_level = 256;
-    auto closest_intensity_index = -1;
-    for (; chunk_link_first != chunk_link_last; ++chunk_link_first)
+    void dsound_player::stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t trigger, uint8_t intensity, uint8_t* p, size_t length)
     {
-        auto delta = abs(chunk_link_first->intensity - intensity);
-        if (delta < closest_intensity_level)
+        auto& in = *_stream.as<stdext::input_stream>();
+        auto& seeker = *_stream.as<stdext::seekable>();
+        while (length != 0)
         {
-            closest_intensity_level = delta;
-            closest_intensity_index = chunk_link_first->chunk_index;
+            seeker.seek(stdext::seek_from::begin, chunk->start_offset + chunk_offset);
+            auto chunk_size = chunk->end_offset - chunk->start_offset;
+            auto bytes = std::min(chunk_size - chunk_offset, length);
+            bytes = in.read(p, bytes);
+            p += bytes;
+            length -= bytes;
+            chunk_offset += bytes;
+            if (chunk_offset == chunk_size)
+            {
+                chunk_offset = 0;
+
+                auto index = next_chunk_index(chunk - &_chunks.front(), trigger, intensity);
+                if (index == end_of_track)
+                {
+                    chunk = nullptr;
+                    std::fill_n(p, length, 0);
+                    return;
+                }
+
+                chunk = &_chunks[index];
+            }
         }
     }
 
-    if (closest_intensity_index != -1)
-        return closest_intensity_index;
+    uint32_t dsound_player::next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity)
+    {
+        const auto& chunk = _chunks[chunk_index];
+        auto track_link_first = begin(_track_links) + chunk.trigger_link_index;
+        auto track_link_last = track_link_first + chunk.trigger_link_count;
+        for (; track_link_first != track_link_last; ++track_link_first)
+        {
+            switch (track_link_first->trigger)
+            {
+            case 64:
+                std::cout << "End of stream.\n";
+                return end_of_track;
+            case 65:
+                std::cout << "Go to prior trigger.\n";
+                return end_of_track;
+            default:
+                if (track_link_first->trigger == trigger)
+                    return track_link_first->chunk_index;
+                break;
+            }
+        }
 
-    if (++chunk_index == chunks.size())
-        chunk_index = 0;
+        auto chunk_link_first = begin(_chunk_links) + chunk.chunk_link_index;
+        auto chunk_link_last = chunk_link_first + chunk.chunk_link_count;
+        auto closest_intensity_level = 256;
+        auto closest_intensity_index = -1;
+        for (; chunk_link_first != chunk_link_last; ++chunk_link_first)
+        {
+            auto delta = abs(chunk_link_first->intensity - intensity);
+            if (delta < closest_intensity_level)
+            {
+                closest_intensity_level = delta;
+                closest_intensity_index = chunk_link_first->chunk_index;
+            }
+        }
 
-    return chunk_index;
+        if (closest_intensity_index != -1)
+            return closest_intensity_index;
+
+        if (++chunk_index == _chunks.size())
+        {
+            std::cout << "Looping to start of file.\n";
+            chunk_index = 0;
+        }
+
+        return chunk_index;
+    }
 }

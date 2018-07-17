@@ -1,28 +1,20 @@
-#include "dsound_error.h"
+#include "dsound_player.h"
 
 #include <stdext/file.h>
-#include <stdext/multi.h>
 #include <stdext/utility.h>
 
-#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
-#include <vector>
 
 #include <cstdlib>
 #include <cstddef>
 
-#define NOMINMAX
-#define INITGUID
-#include <Windows.h>
-#include <dsound.h>
-#include <cguid.h>
-#include <comip.h>
-#include <comdef.h>
 
+using namespace std::literals;
 
 namespace
 {
@@ -31,105 +23,47 @@ namespace
         preflight, postflight, mission
     };
 
-    struct game_trigger_desc
+    enum : uint32_t
     {
-        stream_archive archive;
-        uint8_t trigger;
+        mode_none           = 0x000,
+        mode_track          = 0x001,
+        mode_trigger        = 0x002,
+        mode_intensity      = 0x004,
+        mode_stream         = 0x008,
+        mode_show_tracks    = 0x010,
+        mode_show_triggers  = 0x020,
+        mode_wav            = 0x040,
+        mode_info           = 0x080,
+        mode_loop           = 0x100
     };
 
-    struct stream_file_header
+    struct program_options
     {
-        uint32_t magic;
-        uint32_t version;
-        uint8_t channels;
-        uint8_t bits_per_sample;
-        uint16_t sample_rate;
-        uint32_t buffer_size;
-        uint32_t reserved1;
-        uint32_t chunk_headers_offset;
-        uint32_t chunk_count;
-        uint32_t chunk_link_offset;
-        uint32_t chunk_link_count;
-        uint32_t trigger_link_offset;
-        uint32_t trigger_link_count;
-        uint32_t file_buffer_size;
-        uint32_t thing4_offset;
-        uint32_t thing4_count;
-        uint32_t thing5_offset;
-        uint32_t thing5_count;
-        uint32_t thing6_offset;
-        uint32_t thing6_count;
-        uint8_t reserved2[32];
+        uint32_t program_mode = mode_none;
+        int track = -1;
+        const wchar_t* stream_path = nullptr;
+        const wchar_t* wav_path = nullptr;
+        uint8_t trigger = no_trigger;
+        uint8_t intensity = 15; // default for WC1 (selects patrol music)
+        int loops = -1;
     };
-
-    struct chunk_header
-    {
-        uint32_t start_offset;
-        uint32_t end_offset;
-        uint32_t trigger_link_count;
-        uint32_t trigger_link_index;
-        uint32_t chunk_link_count;
-        uint32_t chunk_link_index;
-    };
-
-    #pragma pack(push)
-    #pragma pack(1)
-    struct stream_chunk_link
-    {
-        uint8_t intensity;
-        uint32_t chunk_index;
-    };
-
-    struct stream_trigger_link
-    {
-        uint8_t trigger;
-        uint32_t chunk_index;
-    };
-    #pragma pack(pop)
 
     class usage_error : public std::runtime_error
     {
         using runtime_error::runtime_error;
     };
 
-    _COM_SMARTPTR_TYPEDEF(IDirectSound8, IID_IDirectSound8);
-    _COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer, IID_IDirectSoundBuffer);
-    _COM_SMARTPTR_TYPEDEF(IDirectSoundBuffer8, IID_IDirectSoundBuffer8);
-    _COM_SMARTPTR_TYPEDEF(IDirectSoundNotify8, IID_IDirectSoundNotify8);
-
-    class dsound_player
+    struct game_trigger_desc
     {
-    public:
-        explicit dsound_player();
-
-    public:
-        void load(stdext::multi_ref<stdext::input_stream, stdext::seekable> stream);
-        void play(uint8_t trigger, uint8_t intensity);
-
-    private:
-        DWORD buffer_size_available();
-        void stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t trigger, uint8_t intensity, uint8_t* p, size_t length);
-        uint32_t next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity);
-
-    private:
-        stdext::multi_ptr<stdext::input_stream, stdext::seekable> _stream;
-        stream_file_header _file_header;
-
-        std::vector<chunk_header> _chunks;
-        std::vector<stream_chunk_link> _chunk_links;
-        std::vector<stream_trigger_link> _track_links;
-
-        IDirectSound8Ptr _ds8;
-        IDirectSoundBufferPtr _dsbuffer_primary;
-        IDirectSoundBuffer8Ptr _dsbuffer8;
-        HANDLE _position_event;
+        stream_archive archive;
+        uint8_t trigger;
     };
 
     void show_usage(const wchar_t* invocation);
+    void diagnose_mode(uint32_t mode);
+    void diagnose_unrecognized(const wchar_t* str);
     std::string to_mbstring(const wchar_t* str);
-
-    constexpr auto end_of_track = uint32_t(-1);
-    constexpr auto no_trigger = uint8_t(-1);
+    int parse_int(const wchar_t* str);
 
     constexpr const wchar_t* stream_filenames[]
     {
@@ -192,41 +126,115 @@ int wmain(int argc, wchar_t* argv[])
 
     try
     {
-        if (argc == 1)
+        if (argc < 2)
         {
             show_usage(invocation.c_str());
             return EXIT_SUCCESS;
         }
 
-        if (argc != 2)
-            throw usage_error("Too many arguments.");
+        program_options options;
+        for (const wchar_t* const* arg = &argv[1]; *arg != nullptr; ++arg)
+        {
+            if ((*arg)[0] == L'-' || (*arg)[0] == L'/')
+            {
+                if (*arg + 1 == L"track"sv)
+                {
+                    if ((options.program_mode & mode_track) != 0)
+                        throw usage_error("The -track option can only be used once.");
 
+                    options.program_mode |= mode_track;
+                    diagnose_mode(options.program_mode);
+                    options.track = parse_int(*++arg);
+                    if (options.track < 0 || unsigned(options.track) >= stdext::lengthof(track_map))
+                    {
+                        std::ostringstream message;
+                        message << "Track must be between 0 and " << stdext::lengthof(track_map) - 1 << '.';
+                        throw usage_error(std::move(message).str());
+                    }
+                }
+                else if (*arg + 1 == L"trigger"sv)
+                {
+                    if ((options.program_mode & mode_trigger) != 0)
+                        throw usage_error("The -trigger option can only be used once.");
+
+                    options.program_mode |= mode_trigger;
+                    diagnose_mode(options.program_mode);
+                    auto value = parse_int(*++arg);
+                    if (value < 0 || unsigned(value) > 0xFF)
+                        throw usage_error("Trigger must be between 0 and 255.");
+                    options.trigger = uint8_t(value);
+                }
+                else if (*arg + 1 == L"intensity"sv)
+                {
+                    if ((options.program_mode & mode_intensity) != 0)
+                        throw usage_error("The -intensity option can only be used once.");
+
+                    options.program_mode |= mode_intensity;
+                    diagnose_mode(options.program_mode);
+                    auto value = parse_int(*++arg);
+                    if (value < 0 || unsigned(value) > 100)
+                        throw usage_error("Intensity must be between 0 and 100.");
+                    options.intensity = uint8_t(value);
+                }
+                else if (*arg + 1 == L"o"sv)
+                {
+                    if ((options.program_mode & mode_wav) != 0)
+                        throw usage_error("The -o option can only be used once.");
+
+                    options.program_mode |= mode_wav;
+                    diagnose_mode(options.program_mode);
+                    options.wav_path = *++arg;
+                    if (options.wav_path == nullptr)
+                        throw usage_error("Expected WAV file path.");
+                }
+                else if (*arg + 1 == L"info"sv)
+                {
+                    if ((options.program_mode & mode_info) != 0)
+                        throw usage_error("The -info option can only be used once.");
+
+                    options.program_mode |= mode_info;
+                    diagnose_mode(options.program_mode);
+                }
+                else if (*arg + 1 == L"loop"sv)
+                {
+                    if ((options.program_mode & mode_loop) != 0)
+                        throw usage_error("The -loop option can only be used once.");
+
+                    options.program_mode |= mode_loop;
+                    diagnose_mode(options.program_mode);
+                    options.loops = parse_int(*++arg);
+                    if (options.loops < 0)
+                        throw usage_error("The -loop option cannot be negative.");
+                }
+                else
+                    diagnose_unrecognized(*arg);
+            }
+            else
+            {
+                if ((options.program_mode & mode_stream) != 0)
+                    diagnose_unrecognized(*arg);
+
+                options.program_mode |= mode_stream;
+                diagnose_mode(options.program_mode);
+                options.stream_path = *arg;
+            }
+        }
+
+        if ((options.program_mode & (mode_track | mode_stream | mode_show_tracks | mode_show_triggers)) == 0)
+            throw usage_error("Missing required options.");
+
+        if ((options.program_mode & mode_track) != 0)
+        {
+            options.stream_path = stream_filenames[track_map[options.track].archive];
+            options.trigger = track_map[options.track].trigger;
+            if (track_map[options.track].archive == stream_archive::mission && options.trigger == no_trigger)
+                options.intensity = uint8_t(options.track);
+        }
+
+        stdext::file_input_stream stream(options.stream_path);
         dsound_player player;
-        wchar_t* end;
-        auto track = int(wcstol(argv[1], &end, 10));
-        if (*end != '\0')
-        {
-            std::ostringstream message;
-            message << "Unrecognized argument: " << to_mbstring(argv[1]);
-            throw usage_error(std::move(message).str());
-        }
-
-        if (track < 0 || unsigned(track) >= stdext::lengthof(track_map))
-        {
-            std::ostringstream message;
-            message << "Track must be between 0 and " << stdext::lengthof(track_map) - 1 << '.';
-            throw usage_error(std::move(message).str());
-        }
-
-        auto stream_name = stream_filenames[track_map[track].archive];
-        stdext::file_input_stream stream(stream_name);
         player.load(stream);
-
-        uint8_t trigger = track_map[track].trigger;
-        uint8_t intensity = 15;
-        if (track_map[track].archive == stream_archive::mission && trigger == no_trigger)
-            intensity = uint8_t(track);
-        player.play(trigger, intensity);
+        player.play(options.trigger, options.intensity);
 
         return EXIT_SUCCESS;
     }
@@ -238,6 +246,10 @@ int wmain(int argc, wchar_t* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << '\n';
+    }
+    catch (const _com_error& e)
+    {
+        std::wcerr << L"Error: " << e.ErrorMessage() << '\n';
     }
     catch (...)
     {
@@ -251,7 +263,63 @@ namespace
 {
     void show_usage(const wchar_t* invocation)
     {
-        std::wcout << L"Usage: " << invocation << L" <tracknum>\n";
+        std::wcout << L"Usage:\n"
+            L"  " << invocation << L" [<options>...] -track <num>\n"
+            L"  " << invocation << L" [<options>...] [-trigger <num>] [-intensity <num>] <filename>\n"
+            L"  " << invocation << L" -show-tracks\n"
+            L"  " << invocation << L" -show-triggers <filename>\n"
+            L"\n"
+            L"The first form selects a music track to play.  The command must be invoked from\n"
+            L"the game directory (the same directory containing the STREAMS directory).  The\n"
+            L"correct stream file will be loaded automatically based on an internal mapping\n"
+            L"from track number to stream file, trigger, and intensity values.  To view the\n"
+            L"mapping, use the -show-tracks option.  Currently, tracks are only supported for\n"
+            L"WC1.\n"
+            L"\n"
+            L"The second form selects a track using the provided trigger and intensity values\n"
+            L"for the given stream file.  If the trigger is not provided, " << invocation << L"will play\n"
+            L"from the first piece of audio data contained in the stream.  If the intensity\n"
+            L"value is not provided, a default value will be used.  To view the list of\n"
+            L"triggers and intensities supported by a given stream file, use the\n"
+            L"-show-triggers option.  This form may be used with any stream file.\n"
+            L"\n"
+            L"Options:\n"
+            L"  -o <filename>\n"
+            L"    Instead of playing music, write it to a WAV file.\n"
+            L"\n"
+            L"  -info\n"
+            L"    Display information related to playback.  The stream contains embedded\n"
+            L"    information that tells the player how to loop a track or how to progress\n"
+            L"    from one track to another.  This information will be printed out as it is\n"
+            L"    encountered.  If the -o option is being used, this option will also print\n"
+            L"    corresponding frame numbers in the output file.\n"
+            L"\n"
+            L"  -loop <num>\n"
+            L"    Continue playback until <num> loops have been completed.  For instance,\n"
+            L"    -loop 0 will disable looping (causing a track to be played only once), and\n"
+            L"    -loop 1 will cause the track to repeat once (provided it has a loop point).\n"
+            L"    If the track does not have a loop point, this option is ignored.\n";
+    }
+
+    void diagnose_mode(uint32_t mode)
+    {
+        if ((mode & (mode_track | mode_trigger)) == (mode_track | mode_trigger))
+            throw usage_error("The -trigger option cannot be used with -track.");
+        if ((mode & (mode_track | mode_intensity)) == (mode_track | mode_intensity))
+            throw usage_error("The -intensity option cannot be used with -track.");
+        if ((mode & (mode_track | mode_stream)) == (mode_track | mode_stream))
+            throw usage_error("Cannot specify a stream file with -track.");
+        if ((mode & mode_show_tracks) != 0 && mode != mode_show_tracks)
+            throw usage_error("The -show-tracks option cannot be used with other options.");
+        if ((mode & mode_show_triggers) != 0 && (mode & ~mode_stream) != mode_show_triggers)
+            throw usage_error("The -show-triggers option cannot be used with other options.");
+    }
+
+    void diagnose_unrecognized(const wchar_t* str)
+    {
+        std::ostringstream message;
+        message << "Unexpected option: " << str;
+        throw usage_error(std::move(message).str());
     }
 
     std::string to_mbstring(const wchar_t* str)
@@ -266,270 +334,20 @@ namespace
         return result;
     }
 
-    dsound_player::dsound_player()
+    int parse_int(const wchar_t* str)
     {
-        // DirectSound needs a window handle for SetCooperativeLevel (nullptr doesn't work).
-        auto window = ::CreateWindow(L"BUTTON", L"Hidden DirectSound Window", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, nullptr, nullptr);
-        auto hr = ::DirectSoundCreate8(&DSDEVID_DefaultPlayback, &_ds8, nullptr);
-        if (FAILED(hr))
-            throw std::system_error(hr, dsound_category());
+        if (str == nullptr)
+            throw usage_error("Expected number.");
 
-        hr = _ds8->SetCooperativeLevel(window, DSSCL_PRIORITY);
-        if (FAILED(hr))
-            throw std::system_error(hr, dsound_category());
-
-        DSBUFFERDESC desc =
+        wchar_t* end;
+        auto value = int(wcstol(str, &end, 10));
+        if (*end != '\0')
         {
-            sizeof(desc),
-            DSBCAPS_PRIMARYBUFFER,
-            0, 0, nullptr,
-            DS3DALG_DEFAULT
-        };
-
-        hr = _ds8->CreateSoundBuffer(&desc, &_dsbuffer_primary, nullptr);
-        if (FAILED(hr))
-            throw std::system_error(hr, dsound_category());
-    }
-
-    void dsound_player::load(stdext::multi_ref<stdext::input_stream, stdext::seekable> stream)
-    {
-        _stream = &stream;
-        auto& in = stream.as<stdext::input_stream>();
-        auto& seeker = stream.as<stdext::seekable>();
-
-        _file_header = in.read<stream_file_header>();
-
-        _chunks.resize(_file_header.chunk_count);
-        seeker.seek(stdext::seek_from::begin, _file_header.chunk_headers_offset);
-        in.read(_chunks.data(), _chunks.size());
-
-        _chunk_links.resize(_file_header.chunk_link_count);
-        seeker.seek(stdext::seek_from::begin, _file_header.chunk_link_offset);
-        in.read(_chunk_links.data(), _chunk_links.size());
-
-        _track_links.resize(_file_header.trigger_link_count);
-        seeker.seek(stdext::seek_from::begin, _file_header.trigger_link_offset);
-        in.read(_track_links.data(), _track_links.size());
-
-        PCMWAVEFORMAT format =
-        {
-            WAVE_FORMAT_PCM,
-            _file_header.channels,
-            _file_header.sample_rate,
-            DWORD(_file_header.sample_rate * _file_header.channels * (_file_header.bits_per_sample / 8)),
-            WORD(_file_header.channels * (_file_header.bits_per_sample / 8)),
-            _file_header.bits_per_sample
-        };
-
-        HRESULT hr = _dsbuffer_primary->SetFormat(reinterpret_cast<LPWAVEFORMATEX>(&format));
-        if (FAILED(hr))
-        {
-            std::cerr << "Couldn't set primary buffer output format.\n";
-            exit(EXIT_FAILURE);
+            std::ostringstream message;
+            message << "Unexpected argument: " << to_mbstring(str) << " (Expected number.)\n";
+            throw usage_error(std::move(message).str());
         }
 
-        DSBUFFERDESC desc =
-        {
-            sizeof(desc),
-            DSBCAPS_GETCURRENTPOSITION2 | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLPOSITIONNOTIFY,
-            _file_header.buffer_size,
-            0,
-            reinterpret_cast<WAVEFORMATEX*>(&format),
-            DS3DALG_DEFAULT
-        };
-
-        IDirectSoundBufferPtr dsbuffer;
-        hr = _ds8->CreateSoundBuffer(&desc, &dsbuffer, nullptr);
-        _dsbuffer8 = std::move(dsbuffer);
-        if (FAILED(hr) || _dsbuffer8 == nullptr)
-        {
-            std::cerr << "Couldn't create sound buffer.\n";
-            exit(EXIT_FAILURE);
-        }
-
-        auto notify = IDirectSoundNotify8Ptr(_dsbuffer8);
-        if (notify == nullptr)
-        {
-            std::cerr << "Couldn't create Notify interface.\n";
-            exit(EXIT_FAILURE);
-        }
-
-        _position_event = ::CreateEvent(nullptr, TRUE, FALSE, nullptr);
-        if (_position_event == nullptr)
-        {
-            std::cerr << "Couldn't create event object.\n";
-            exit(EXIT_FAILURE);
-        }
-
-        DSBPOSITIONNOTIFY positions[] =
-        {
-            { 0, _position_event },
-            { _file_header.buffer_size / 2, _position_event },
-        };
-        hr = notify->SetNotificationPositions(stdext::lengthof(positions), positions);
-        if (FAILED(hr))
-        {
-            std::cerr << "Couldn't set notification positions.\n";
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    void dsound_player::play(uint8_t trigger, uint8_t intensity)
-    {
-        auto index = next_chunk_index(0, trigger, intensity);
-        if (index == end_of_track)
-            return;
-
-        trigger = no_trigger;
-
-        const chunk_header* chunk = &_chunks[index];
-        uint32_t chunk_offset = 0;
-
-        uint8_t* buffer;
-        DWORD size;
-        auto hr = _dsbuffer8->Lock(0, _file_header.buffer_size, reinterpret_cast<LPVOID*>(&buffer), &size, nullptr, nullptr, 0);
-        if (FAILED(hr))
-        {
-            std::cerr << "Couldn't lock buffer.\n";
-            exit(EXIT_FAILURE);
-        }
-        stream_chunks(chunk, chunk_offset, trigger, intensity, buffer, size);
-        _dsbuffer8->Unlock(buffer, size, nullptr, 0);
-
-        hr = _dsbuffer8->Play(0, 0, DSBPLAY_LOOPING);
-        if (FAILED(hr))
-        {
-            std::cerr << "Couldn't play stream.\n";
-            exit(EXIT_FAILURE);
-        }
-
-        // Consume one event because we have two full sections in the buffer.
-        ::WaitForSingleObject(_position_event, INFINITE);
-        ::ResetEvent(_position_event);
-
-        bool done = false;
-        while (!done)
-        {
-            auto wait_result = ::WaitForSingleObject(_position_event, INFINITE);
-            if (wait_result == WAIT_FAILED)
-            {
-                std::cerr << "Wait failed.\n";
-                exit(EXIT_FAILURE);
-            }
-            ::ResetEvent(_position_event);
-
-            DWORD play, write;
-            _dsbuffer8->GetCurrentPosition(&play, &write);
-            auto midpoint = _file_header.buffer_size / 2;
-            auto buffer_offset = play < midpoint ? midpoint : 0;
-            size = buffer_offset == 0 ? midpoint : _file_header.buffer_size - midpoint;
-            _dsbuffer8->Lock(buffer_offset, size, reinterpret_cast<LPVOID*>(&buffer), &size, nullptr, nullptr, 0);
-            if (chunk == nullptr)
-            {
-                std::fill_n(buffer, size, 0);
-                done = true;
-            }
-            else
-                stream_chunks(chunk, chunk_offset, trigger, intensity, buffer, size);
-            _dsbuffer8->Unlock(buffer, size, nullptr, 0);
-        }
-
-        ::WaitForSingleObject(_position_event, INFINITE);
-        ::ResetEvent(_position_event);
-        _dsbuffer8->Stop();
-    }
-
-    DWORD dsound_player::buffer_size_available()
-    {
-        DWORD play_cursor;
-        DWORD write_cursor;
-        auto hr = _dsbuffer8->GetCurrentPosition(&play_cursor, &write_cursor);
-        if (FAILED(hr))
-        {
-            std::cerr << "Couldn't get buffer size.\n";
-            exit(EXIT_FAILURE);
-        }
-
-        if (play_cursor >= write_cursor)
-            return play_cursor - write_cursor;
-        return _file_header.buffer_size - write_cursor + play_cursor;
-    }
-
-    void dsound_player::stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t trigger, uint8_t intensity, uint8_t* p, size_t length)
-    {
-        auto& in = *_stream.as<stdext::input_stream>();
-        auto& seeker = *_stream.as<stdext::seekable>();
-        while (length != 0)
-        {
-            seeker.seek(stdext::seek_from::begin, chunk->start_offset + chunk_offset);
-            auto chunk_size = chunk->end_offset - chunk->start_offset;
-            auto bytes = std::min(chunk_size - chunk_offset, length);
-            bytes = in.read(p, bytes);
-            p += bytes;
-            length -= bytes;
-            chunk_offset += bytes;
-            if (chunk_offset == chunk_size)
-            {
-                chunk_offset = 0;
-
-                auto index = next_chunk_index(chunk - &_chunks.front(), trigger, intensity);
-                if (index == end_of_track)
-                {
-                    chunk = nullptr;
-                    std::fill_n(p, length, 0);
-                    return;
-                }
-
-                chunk = &_chunks[index];
-            }
-        }
-    }
-
-    uint32_t dsound_player::next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity)
-    {
-        const auto& chunk = _chunks[chunk_index];
-        auto track_link_first = begin(_track_links) + chunk.trigger_link_index;
-        auto track_link_last = track_link_first + chunk.trigger_link_count;
-        for (; track_link_first != track_link_last; ++track_link_first)
-        {
-            switch (track_link_first->trigger)
-            {
-            case 64:
-                std::cout << "End of stream.\n";
-                return end_of_track;
-            case 65:
-                std::cout << "Go to prior trigger.\n";
-                return end_of_track;
-            default:
-                if (track_link_first->trigger == trigger)
-                    return track_link_first->chunk_index;
-                break;
-            }
-        }
-
-        auto chunk_link_first = begin(_chunk_links) + chunk.chunk_link_index;
-        auto chunk_link_last = chunk_link_first + chunk.chunk_link_count;
-        auto closest_intensity_level = 256;
-        auto closest_intensity_index = -1;
-        for (; chunk_link_first != chunk_link_last; ++chunk_link_first)
-        {
-            auto delta = abs(chunk_link_first->intensity - intensity);
-            if (delta < closest_intensity_level)
-            {
-                closest_intensity_level = delta;
-                closest_intensity_index = chunk_link_first->chunk_index;
-            }
-        }
-
-        if (closest_intensity_index != -1)
-            return closest_intensity_index;
-
-        if (++chunk_index == _chunks.size())
-        {
-            std::cout << "Looping to start of file.\n";
-            chunk_index = 0;
-        }
-
-        return chunk_index;
+        return value;
     }
 }

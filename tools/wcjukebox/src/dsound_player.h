@@ -1,7 +1,5 @@
 #pragma once
 
-#include "player.h"
-
 #include <stdext/multi.h>
 #include <stdext/stream.h>
 
@@ -20,23 +18,16 @@ class dsound_player
 {
 public:
     explicit dsound_player();
+    ~dsound_player();
 
 public:
-    void load(stdext::multi_ref<stdext::input_stream, stdext::seekable> stream);
-    void play(uint8_t trigger, uint8_t intensity);
+    void reset(uint16_t channels, uint32_t sample_rate, uint16_t bits_per_sample, uint32_t buffer_size);
+    void play(stdext::input_stream& stream);
 
 private:
-    void stream_chunks(const chunk_header*& chunk, uint32_t& chunk_offset, uint8_t trigger, uint8_t intensity, uint8_t* p, size_t length);
-    uint32_t next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity);
+    size_t dsound_player::fill_buffer(uint32_t offset, stdext::input_stream& stream, uint32_t size);
 
 private:
-    stdext::multi_ptr<stdext::input_stream, stdext::seekable> _stream;
-    stream_file_header _file_header;
-
-    std::vector<chunk_header> _chunks;
-    std::vector<stream_chunk_link> _chunk_links;
-    std::vector<stream_trigger_link> _track_links;
-
     IDirectSound8Ptr _ds8;
     IDirectSoundBufferPtr _dsbuffer_primary;
     IDirectSoundBuffer8Ptr _dsbuffer8;

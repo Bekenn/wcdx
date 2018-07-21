@@ -1,3 +1,4 @@
+#include "wcaudio_stream.h"
 #include "dsound_player.h"
 
 #include <stdext/file.h>
@@ -231,10 +232,14 @@ int wmain(int argc, wchar_t* argv[])
                 options.intensity = uint8_t(options.track);
         }
 
-        stdext::file_input_stream stream(options.stream_path);
+        stdext::file_input_stream file(options.stream_path);
+        wcaudio_stream stream(file);
+        stream.select(options.trigger, options.intensity);
+
+        auto& header = stream.file_header();
         dsound_player player;
-        player.load(stream);
-        player.play(options.trigger, options.intensity);
+        player.reset(header.channels, header.sample_rate, header.bits_per_sample, header.buffer_size);
+        player.play(stream);
 
         return EXIT_SUCCESS;
     }

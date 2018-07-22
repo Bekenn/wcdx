@@ -1,5 +1,6 @@
 #include "wcaudio_stream.h"
 #include "dsound_player.h"
+#include "wav_file.h"
 
 #include <stdext/file.h>
 #include <stdext/utility.h>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include <cstdlib>
@@ -34,8 +36,9 @@ namespace
         mode_show_tracks    = 0x010,
         mode_show_triggers  = 0x020,
         mode_wav            = 0x040,
-        mode_info           = 0x080,
-        mode_loop           = 0x100
+        mode_loop           = 0x080,
+        mode_single         = 0x100,
+        mode_debug_info     = 0x200
     };
 
     struct program_options
@@ -188,14 +191,6 @@ int wmain(int argc, wchar_t* argv[])
                     if (options.wav_path == nullptr)
                         throw usage_error("Expected WAV file path.");
                 }
-                else if (*arg + 1 == L"info"sv)
-                {
-                    if ((options.program_mode & mode_info) != 0)
-                        throw usage_error("The -info option can only be used once.");
-
-                    options.program_mode |= mode_info;
-                    diagnose_mode(options.program_mode);
-                }
                 else if (*arg + 1 == L"loop"sv)
                 {
                     if ((options.program_mode & mode_loop) != 0)
@@ -206,6 +201,22 @@ int wmain(int argc, wchar_t* argv[])
                     options.loops = parse_int(*++arg);
                     if (options.loops < 0)
                         throw usage_error("The -loop option cannot be negative.");
+                }
+                else if (*arg + 1 == L"single"sv)
+                {
+                    if ((options.program_mode & mode_single) != 0)
+                        throw usage_error("The -single option can only be used once.");
+
+                    options.program_mode |= mode_single;
+                    diagnose_mode(options.program_mode);
+                }
+                else if (*arg + 1 == L"debug-info"sv)
+                {
+                    if ((options.program_mode & mode_debug_info) != 0)
+                        throw usage_error("The debug-info option can only be used once.");
+
+                    options.program_mode |= mode_debug_info;
+                    diagnose_mode(options.program_mode);
                 }
                 else
                     diagnose_unrecognized(*arg);
@@ -232,14 +243,65 @@ int wmain(int argc, wchar_t* argv[])
                 options.intensity = uint8_t(options.track);
         }
 
+        std::unordered_map<uint32_t, unsigned> chunk_frame_map;
+        chunk_frame_map.reserve(128);
+
         stdext::file_input_stream file(options.stream_path);
         wcaudio_stream stream(file);
+
+        stream.on_next_chunk([&](uint32_t chunk_index, unsigned frame_count)
+        {
+            chunk_frame_map.insert({ chunk_index, frame_count });
+        });
+        stream.on_loop([&](uint32_t chunk_index, unsigned frame_count)
+        {
+            if ((options.program_mode & mode_debug_info) != 0)
+            {
+                std::cout << "Loop to chunk " << chunk_index
+                    << " (frame index " << chunk_frame_map[chunk_index] << ')'
+                    << std::endl;
+            }
+            return options.loops < 0 || options.loops-- != 0;
+        });
+        stream.on_start_track([&](uint32_t chunk_index)
+        {
+            if ((options.program_mode & mode_debug_info) != 0)
+                std::cout << "Start track at chunk " << chunk_index << std::endl;
+            chunk_frame_map.insert({ chunk_index, 0 });
+        });
+        stream.on_next_track([&](uint32_t chunk_index, unsigned frame_count)
+        {
+            chunk_frame_map.insert({ chunk_index, frame_count });
+            if ((options.program_mode & mode_debug_info) != 0)
+                std::cout << "Switch to track at chunk " << chunk_index << std::endl;
+            return (options.program_mode & mode_single) == 0;
+        });
+        stream.on_prev_track([&](unsigned frame_count)
+        {
+            if ((options.program_mode & mode_debug_info) != 0)
+                std::cout << "Return to previous track" << std::endl;
+        });
+        stream.on_end_of_stream([&](unsigned frame_count)
+        {
+            if ((options.program_mode & mode_debug_info) != 0)
+                std::cout << "End of stream" << std::endl;
+        });
+
         stream.select(options.trigger, options.intensity);
 
-        auto& header = stream.file_header();
-        dsound_player player;
-        player.reset(header.channels, header.sample_rate, header.bits_per_sample, header.buffer_size);
-        player.play(stream);
+        if ((options.program_mode & mode_wav) != 0)
+        {
+            if (options.loops < 0)
+                options.loops = 0;
+            stdext::file_output_stream out(options.wav_path);
+            write_wave(out, stream, stream.channels(), stream.sample_rate(), stream.bits_per_sample(), stream.buffer_size());
+        }
+        else
+        {
+            dsound_player player;
+            player.reset(stream.channels(), stream.sample_rate(), stream.bits_per_sample(), stream.buffer_size());
+            player.play(stream);
+        }
 
         return EXIT_SUCCESS;
     }
@@ -292,18 +354,23 @@ namespace
             L"  -o <filename>\n"
             L"    Instead of playing music, write it to a WAV file.\n"
             L"\n"
-            L"  -info\n"
-            L"    Display information related to playback.  The stream contains embedded\n"
-            L"    information that tells the player how to loop a track or how to progress\n"
-            L"    from one track to another.  This information will be printed out as it is\n"
-            L"    encountered.  If the -o option is being used, this option will also print\n"
-            L"    corresponding frame numbers in the output file.\n"
-            L"\n"
             L"  -loop <num>\n"
             L"    Continue playback until <num> loops have been completed.  For instance,\n"
             L"    -loop 0 will disable looping (causing a track to be played only once), and\n"
             L"    -loop 1 will cause the track to repeat once (provided it has a loop point).\n"
-            L"    If the track does not have a loop point, this option is ignored.\n";
+            L"    If the track does not have a loop point, this option is ignored.  If this\n"
+            L"    option is not specified, the track will loop indefinitely.\n"
+            L"\n"
+            L"  -single\n"
+            L"    Stop playback at transition points instead of following the transition to\n"
+            L"    the next track.\n"
+            L"\n"
+            L"  -debug-info\n"
+            L"    Display information related to playback.  The stream contains embedded\n"
+            L"    information that tells the player how to loop a track or how to progress\n"
+            L"    from one track to another.  This information will be printed out as it is\n"
+            L"    encountered.  If the -o option is being used, this option will also print\n"
+            L"    corresponding frame numbers in the output file.\n";
     }
 
     void diagnose_mode(uint32_t mode)

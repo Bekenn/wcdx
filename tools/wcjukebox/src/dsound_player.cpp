@@ -54,14 +54,15 @@ dsound_player::~dsound_player()
 
 void dsound_player::reset(uint16_t channels, uint32_t sample_rate, uint16_t bits_per_sample, uint32_t buffer_size)
 {
+    auto bytes_per_sample = (bits_per_sample + 7) / 8;
     PCMWAVEFORMAT format =
     {
         {
             WAVE_FORMAT_PCM,
             channels,
             sample_rate,
-            DWORD(sample_rate * channels * (bits_per_sample / 8)),
-            WORD(channels * (bits_per_sample / 8))
+            DWORD(sample_rate * channels * bytes_per_sample),
+            WORD(channels * bytes_per_sample)
         },
         bits_per_sample
     };

@@ -2,6 +2,7 @@
 
 #include <stdext/file.h>
 #include <stdext/multi.h>
+#include <stdext/string.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -61,8 +62,6 @@ static void extract_image(stdext::multi_ref<stdext::input_stream, stdext::seekab
 static void pack_images(const std::vector<const wchar_t*>& input_paths, game_id game, const std::vector<point>& reference_points, const wchar_t* output_path);
 static void pack_image(const IWICImagingFactoryPtr& imaging_factory, const IWICPalettePtr& palette, const IWICBitmapFrameDecodePtr& input, point reference_point, stdext::output_stream& output);
 static rect get_image_dimensions(stdext::multi_ref<stdext::input_stream, stdext::seekable> input);
-
-static std::string to_mbstring(const wchar_t* str);
 
 int wmain(int argc, wchar_t* argv[])
 {
@@ -148,7 +147,7 @@ int wmain(int argc, wchar_t* argv[])
 					output_path = argv[n];
 				}
 				else
-					throw usage_error("Unrecognized option " + to_mbstring(argv[n]));
+					throw usage_error("Unrecognized option " + stdext::to_mbstring(argv[n]));
 			}
 			else
             {
@@ -602,16 +601,4 @@ rect get_image_dimensions(stdext::multi_ref<stdext::input_stream, stdext::seekab
 
 	seeker.set_position(start_position);
 	return dim;
-}
-
-std::string to_mbstring(const wchar_t* str)
-{
-    std::mbstate_t state = {};
-    auto length = std::wcsrtombs(nullptr, &str, 0, &state);
-    if (length == size_t(-1))
-        throw std::runtime_error("Unicode error");
-
-    std::string result(length, '\0');
-    std::wcsrtombs(result.data(), &str, length, &state);
-    return result;
 }

@@ -1,4 +1,5 @@
 #include <stdext/file.h>
+#include <stdext/string.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -19,8 +20,6 @@ static void show_usage(const wchar_t* invocation);
 
 static void extract_all(stdext::file_input_stream& input_file, const wchar_t* output_path);
 static void extract_one(stdext::file_input_stream& input_file, unsigned index, const wchar_t* output_path);
-
-static std::string to_mbstring(const wchar_t* str);
 
 int wmain(int argc, wchar_t* argv[])
 {
@@ -47,7 +46,7 @@ int wmain(int argc, wchar_t* argv[])
 						wchar_t* endp;
 						index = unsigned(wcstoul(argv[n], &endp, 10));
 						if (*endp != L'\0')
-							throw usage_error("Bad resource index: " + to_mbstring(argv[n]));
+							throw usage_error("Bad resource index: " + stdext::to_mbstring(argv[n]));
 					}
 				}
                 else if (wcscmp(argv[n], L"-extract-all") == 0)
@@ -64,7 +63,7 @@ int wmain(int argc, wchar_t* argv[])
 			else
 			{
 				if (input_path != nullptr)
-					throw usage_error("Unrecognized argument: " + to_mbstring(argv[n]));
+					throw usage_error("Unrecognized argument: " + stdext::to_mbstring(argv[n]));
 				input_path = argv[n];
 			}
 		}
@@ -148,16 +147,4 @@ void extract_one(stdext::file_input_stream& input_file, unsigned index, const wc
         output_file.write(buf, bytes);
         resource_size -= bytes;
     }
-}
-
-std::string to_mbstring(const wchar_t* str)
-{
-    std::mbstate_t state = { };
-    auto length = std::wcsrtombs(nullptr, &str, 0, &state);
-    if (length == size_t(-1))
-        throw std::runtime_error("Unicode error");
-
-    std::string result(length, '\0');
-    std::wcsrtombs(result.data(), &str, length, &state);
-    return result;
 }

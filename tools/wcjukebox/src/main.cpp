@@ -1,8 +1,8 @@
 #include "wcaudio_stream.h"
-#include "dsound_player.h"
-#include "wav_file.h"
+#include "wave.h"
 
 #include <stdext/file.h>
+#include <stdext/string.h>
 #include <stdext/utility.h>
 
 #include <filesystem>
@@ -66,7 +66,6 @@ namespace
     void show_usage(const wchar_t* invocation);
     void diagnose_mode(uint32_t mode);
     void diagnose_unrecognized(const wchar_t* str);
-    std::string to_mbstring(const wchar_t* str);
     int parse_int(const wchar_t* str);
 
     constexpr const wchar_t* stream_filenames[]
@@ -297,11 +296,7 @@ int wmain(int argc, wchar_t* argv[])
             write_wave(out, stream, stream.channels(), stream.sample_rate(), stream.bits_per_sample(), stream.buffer_size());
         }
         else
-        {
-            dsound_player player;
-            player.reset(stream.channels(), stream.sample_rate(), stream.bits_per_sample(), stream.buffer_size());
-            player.play(stream);
-        }
+            play_wave(stream, stream.channels(), stream.sample_rate(), stream.bits_per_sample(), stream.buffer_size());
 
         return EXIT_SUCCESS;
     }
@@ -313,10 +308,6 @@ int wmain(int argc, wchar_t* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << '\n';
-    }
-    catch (const _com_error& e)
-    {
-        std::wcerr << L"Error: " << e.ErrorMessage() << '\n';
     }
     catch (...)
     {
@@ -394,18 +385,6 @@ namespace
         throw usage_error(std::move(message).str());
     }
 
-    std::string to_mbstring(const wchar_t* str)
-    {
-        std::mbstate_t state = {};
-        auto length = std::wcsrtombs(nullptr, &str, 0, &state);
-        if (length == size_t(-1))
-            throw std::runtime_error("Unicode error");
-
-        std::string result(length, '\0');
-        std::wcsrtombs(result.data(), &str, length, &state);
-        return result;
-    }
-
     int parse_int(const wchar_t* str)
     {
         if (str == nullptr)
@@ -416,7 +395,7 @@ namespace
         if (*end != '\0')
         {
             std::ostringstream message;
-            message << "Unexpected argument: " << to_mbstring(str) << " (Expected number.)\n";
+            message << "Unexpected argument: " << stdext::to_mbstring(str) << " (Expected number.)\n";
             throw usage_error(std::move(message).str());
         }
 

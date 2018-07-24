@@ -1,4 +1,4 @@
-#include "wav_file.h"
+#include "wave.h"
 
 #include <stdext/endian.h>
 

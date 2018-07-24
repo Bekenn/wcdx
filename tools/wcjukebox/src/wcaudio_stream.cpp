@@ -57,6 +57,28 @@ wcaudio_stream::wcaudio_stream(stdext::multi_ref<stdext::input_stream, stdext::s
 
 wcaudio_stream::~wcaudio_stream() = default;
 
+std::vector<uint8_t> wcaudio_stream::triggers() const
+{
+    auto& chunk = _chunks[0];
+    stdext::array_view trigger_links(&_trigger_links[chunk.trigger_link_index], chunk.trigger_link_count);
+    std::vector<uint8_t> triggers;
+    triggers.reserve(trigger_links.size());
+    for (auto& link : trigger_links)
+        triggers.push_back(link.trigger);
+    return triggers;
+}
+
+std::vector<uint8_t> wcaudio_stream::intensities() const
+{
+    auto& index_chunk = _chunks[0];
+    stdext::array_view chunk_links(&_chunk_links[index_chunk.chunk_link_index], index_chunk.chunk_link_count);
+    std::vector<uint8_t> intensities;
+    intensities.reserve(chunk_links.size());
+    for (auto& link : chunk_links)
+        intensities.push_back(link.intensity);
+    return intensities;
+}
+
 void wcaudio_stream::select(uint8_t trigger, uint8_t intensity)
 {
     auto chunk_index = next_chunk_index(0, trigger, intensity);
@@ -81,7 +103,7 @@ size_t wcaudio_stream::do_read(uint8_t* buffer, size_t size)
     auto p = buffer;
     while (size != 0)
     {
-        seeker.seek(stdext::seek_from::begin, stdext::stream_offset(_current_chunk->start_offset) + _current_chunk_offset);
+        seeker.set_position(stdext::stream_position(_current_chunk->start_offset) + _current_chunk_offset);
         auto chunk_size = _current_chunk->end_offset - _current_chunk->start_offset;
         auto bytes = std::min(chunk_size - _current_chunk_offset, size);
 

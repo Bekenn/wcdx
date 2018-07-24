@@ -64,6 +64,9 @@ public:
     uint16_t sample_rate() const;
     uint32_t buffer_size() const;
 
+    std::vector<uint8_t> triggers() const;
+    std::vector<uint8_t> intensities() const;
+
     void select(uint8_t trigger, uint8_t intensity);
 
     void on_next_chunk(next_chunk_handler handler);

@@ -167,17 +167,16 @@ int wmain(int argc, wchar_t* argv[])
                         throw usage_error("Trigger must be between 0 and 255.");
                     options.trigger = uint8_t(value);
                 }
-                else if (*arg + 1 == L"intensity"sv)
+                else if (*arg + 1 == L"show-triggers"sv)
                 {
-                    if ((options.program_mode & mode_intensity) != 0)
-                        throw usage_error("The -intensity option can only be used once.");
+                    if ((options.program_mode & mode_show_triggers) != 0)
+                        throw usage_error("The -show-triggers option can only be used once.");
 
-                    options.program_mode |= mode_intensity;
+                    options.program_mode |= mode_show_triggers;
                     diagnose_mode(options.program_mode);
-                    auto value = parse_int(*++arg);
-                    if (value < 0 || unsigned(value) > 100)
-                        throw usage_error("Intensity must be between 0 and 100.");
-                    options.intensity = uint8_t(value);
+                    options.stream_path = *++arg;
+                    if (options.stream_path == nullptr)
+                        throw usage_error("Expected STR file path.");
                 }
                 else if (*arg + 1 == L"o"sv)
                 {
@@ -189,6 +188,18 @@ int wmain(int argc, wchar_t* argv[])
                     options.wav_path = *++arg;
                     if (options.wav_path == nullptr)
                         throw usage_error("Expected WAV file path.");
+                }
+                else if (*arg + 1 == L"intensity"sv)
+                {
+                    if ((options.program_mode & mode_intensity) != 0)
+                        throw usage_error("The -intensity option can only be used once.");
+
+                    options.program_mode |= mode_intensity;
+                    diagnose_mode(options.program_mode);
+                    auto value = parse_int(*++arg);
+                    if (value < 0 || unsigned(value) > 100)
+                        throw usage_error("Intensity must be between 0 and 100.");
+                    options.intensity = uint8_t(value);
                 }
                 else if (*arg + 1 == L"loop"sv)
                 {
@@ -242,11 +253,23 @@ int wmain(int argc, wchar_t* argv[])
                 options.intensity = uint8_t(options.track);
         }
 
-        std::unordered_map<uint32_t, unsigned> chunk_frame_map;
-        chunk_frame_map.reserve(128);
-
         stdext::file_input_stream file(options.stream_path);
         wcaudio_stream stream(file);
+
+        if ((options.program_mode & mode_show_triggers) != 0)
+        {
+            std::cout << "Available triggers:";
+            for (auto trigger : stream.triggers())
+                std::cout << ' ' << unsigned(trigger);
+            std::cout << "\nAvailable intensities:";
+            for (auto intensity : stream.intensities())
+                std::cout << ' ' << unsigned(intensity);
+            std::cout << '\n';
+            return EXIT_SUCCESS;
+        }
+
+        std::unordered_map<uint32_t, unsigned> chunk_frame_map;
+        chunk_frame_map.reserve(128);
 
         stream.on_next_chunk([&](uint32_t chunk_index, unsigned frame_count)
         {
@@ -323,7 +346,7 @@ namespace
     {
         std::wcout << L"Usage:\n"
             L"  " << invocation << L" [<options>...] -track <num>\n"
-            L"  " << invocation << L" [<options>...] [-trigger <num>] [-intensity <num>] <filename>\n"
+            L"  " << invocation << L" [<options>...] -trigger <num> <filename>\n"
             L"  " << invocation << L" -show-tracks\n"
             L"  " << invocation << L" -show-triggers <filename>\n"
             L"\n"
@@ -334,16 +357,25 @@ namespace
             L"mapping, use the -show-tracks option.  Currently, tracks are only supported for\n"
             L"WC1.\n"
             L"\n"
-            L"The second form selects a track using the provided trigger and intensity values\n"
-            L"for the given stream file.  If the trigger is not provided, " << invocation << L"will play\n"
-            L"from the first piece of audio data contained in the stream.  If the intensity\n"
-            L"value is not provided, a default value will be used.  To view the list of\n"
-            L"triggers and intensities supported by a given stream file, use the\n"
-            L"-show-triggers option.  This form may be used with any stream file.\n"
+            L"The second form selects a track using the provided trigger value for the given\n"
+            L"stream file.  If the trigger is not provided, " << invocation << L" will play from the\n"
+            L"first piece of audio data contained in the stream.  If the intensity value is\n"
+            L"not provided, a default value will be used.  To view the list of triggers and\n"
+            L"intensities supported by a given stream file, use the -show-triggers option.\n"
+            L"This form may be used with any stream file.\n"
             L"\n"
             L"Options:\n"
             L"  -o <filename>\n"
             L"    Instead of playing music, write it to a WAV file.\n"
+            L"\n"
+            L"  -intensity <num>\n"
+            L"    This value is used by the playback engine to handle transitions between\n"
+            L"    tracks.  Some tracks are designed to transition to other specific tracks\n"
+            L"    upon completion, and this value determines which one that is.  For example,\n"
+            L"    the scramble music from WC1 will transition to a track appropriate to a\n"
+            L"    given mission type based on the intensity value.  If this value is not\n"
+            L"    provided, a default value will be used.  For a list of supported triggers\n"
+            L"    and intensity values, use the -show-triggers option.\n"
             L"\n"
             L"  -loop <num>\n"
             L"    Continue playback until <num> loops have been completed.  For instance,\n"
@@ -368,8 +400,6 @@ namespace
     {
         if ((mode & (mode_track | mode_trigger)) == (mode_track | mode_trigger))
             throw usage_error("The -trigger option cannot be used with -track.");
-        if ((mode & (mode_track | mode_intensity)) == (mode_track | mode_intensity))
-            throw usage_error("The -intensity option cannot be used with -track.");
         if ((mode & (mode_track | mode_stream)) == (mode_track | mode_stream))
             throw usage_error("Cannot specify a stream file with -track.");
         if ((mode & mode_show_tracks) != 0 && mode != mode_show_tracks)

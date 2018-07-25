@@ -35,8 +35,8 @@ struct stream_file_header
     uint32_t trigger_link_offset;
     uint32_t trigger_link_count;
     uint32_t file_buffer_size;
-    uint32_t thing4_offset;
-    uint32_t thing4_count;
+    uint32_t file_entry_offset;
+    uint32_t file_entry_count;
     uint32_t thing5_offset;
     uint32_t thing5_count;
     uint32_t thing6_offset;

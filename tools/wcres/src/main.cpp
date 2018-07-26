@@ -23,7 +23,9 @@ static void extract_one(stdext::file_input_stream& input_file, unsigned index, c
 
 int wmain(int argc, wchar_t* argv[])
 {
-	try
+    std::wstring invocation = argc > 0 ? std::filesystem::path(argv[0]).filename() : "wcres";
+
+    try
 	{
 		const wchar_t* input_path = nullptr;
 		const wchar_t* output_path = nullptr;
@@ -31,7 +33,7 @@ int wmain(int argc, wchar_t* argv[])
 
 		if (argc == 1)
 		{
-			show_usage(argv[0]);
+			show_usage(invocation.c_str());
 			return EXIT_SUCCESS;
 		}
 
@@ -85,7 +87,7 @@ int wmain(int argc, wchar_t* argv[])
 	catch (const usage_error& e)
 	{
         std::cerr << "Error: " << e.what() << '\n';
-		show_usage(argv[0]);
+		show_usage(invocation.c_str());
 	}
 	catch (const std::exception& e)
 	{
@@ -101,8 +103,19 @@ int wmain(int argc, wchar_t* argv[])
 
 void show_usage(const wchar_t* invocation)
 {
-    std::wcout << L"Usage: " << invocation << " -o <output_path> -extract <resource_index> <input_path>\n"
-                  L"       " << invocation << " -o <output_path> -extract-all <input_path>\n";
+    std::wcout <<
+        L"Usage: " << invocation << " -o <output_path> -extract <resource_index> <input_path>\n"
+        L"       " << invocation << " -o <output_path> -extract-all <input_path>\n"
+        L"\n"
+        L"Extracts resources from files found in the GAMEDAT folder of wc1 and wc2.\n"
+        L"\n"
+        L"The -extract option extracts a single resource from a file and saves it at\n"
+        L"<output_path>.  Resources in a file are numbered starting from 0, with the\n"
+        L"resource number given as <resource_index>.\n"
+        L"\n"
+        L"The -extract-all option extracts all resources from a file, saving them in a\n"
+        L"directory at <output_path>.  If <output_path> does not exist, a new directory\n"
+        L"will be created.  Resources are saved in files named with the resource number.\n";
 }
 
 void extract_all(stdext::file_input_stream& input_file, const wchar_t* output_path)

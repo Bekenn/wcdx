@@ -65,9 +65,17 @@ static rect get_image_dimensions(stdext::multi_ref<stdext::input_stream, stdext:
 
 int wmain(int argc, wchar_t* argv[])
 {
-	try
+    std::wstring invocation = argc > 0 ? std::filesystem::path(argv[0]).filename() : "wcimg";
+    
+    try
 	{
-		std::vector<const wchar_t*> input_paths;
+        if (argc < 2)
+        {
+            show_usage(invocation.c_str());
+            return EXIT_SUCCESS;
+        }
+
+        std::vector<const wchar_t*> input_paths;
         std::vector<point> reference_points;
         auto game = game_id::wc1;
 		const wchar_t* output_path = nullptr;
@@ -76,7 +84,7 @@ int wmain(int argc, wchar_t* argv[])
 
         enum class mode { unspecified, extract, extract_all, pack } invocation_mode = mode::unspecified;
 
-		for (int n = 1; n < argc; ++n)
+        for (int n = 1; n < argc; ++n)
 		{
 			if (argv[n][0] == L'-')
 			{
@@ -184,7 +192,7 @@ int wmain(int argc, wchar_t* argv[])
     catch (const usage_error& e)
     {
         std::cerr << "Error: " << e.what() << '\n';
-        show_usage(argv[0]);
+        show_usage(invocation.c_str());
     }
     catch (const _com_error& e)
 	{
@@ -205,33 +213,36 @@ int wmain(int argc, wchar_t* argv[])
 void show_usage(const wchar_t* invocation)
 {
     std::wcout << L"Usage:\n"
-        L"\t" << invocation << L" -o <output_path> [-wc1 | -wc2] -extract <image_index> <input_path>\n"
-        L"\t" << invocation << L" -o <output_path> [-wc1 | -wc2] -extract-all -prefix <name_prefix> <input_path>\n"
-        L"\t" << invocation << L" -o <output_path> [-wc1 | -wc2] -pack <input_path> [-ref <x> <y>] ...\n"
+        L"    " << invocation << L" -o <output_path> [-wc1 | -wc2] -extract <image_index> <input_path>\n"
+        L"    " << invocation << L" -o <output_path> [-wc1 | -wc2] -extract-all -prefix <name_prefix> <input_path>\n"
+        L"    " << invocation << L" -o <output_path> [-wc1 | -wc2] -pack <input_path> [-ref <x> <y>] ...\n"
         L"\n"
         L"image_index gives the zero-based index of the image to be extracted.\n"
-        L"When using the -extract-all option, output_path specifies a directory instead of\n"
-        L"a file name.  A new file is created for each image in the input file.  File names\n"
-        L"begin with 0.png, with each succeeding file name incrementing the number by one.\n"
-        L"If the -prefix option is given, then the specified sequence of characters is\n"
-        L"prepended to each file name.\n"
+        L"\n"
+        L"When using the -extract-all option, output_path specifies a directory instead\n"
+        L"of a file name.  A new file is created for each image in the input file.  File\n"
+        L"names begin with 0.png, with each succeeding file name incrementing the number\n"
+        L"by one.  If the -prefix option is given, then the specified sequence of\n"
+        L"characters is prepended to each file name.\n"
         L"\n"
         L"Example:\n"
-        L"\t" << invocation << L" -o images -extract-all -prefix foo imageset\n"
+        L"    " << invocation << L" -o images -extract-all -prefix foo imageset\n"
         L"This invocation will output several files in the images directory with names of\n"
         L"the form foo<n>.png, where <n> gives the numeric index of each image.\n"
+        L"\n"
+        L"The -wc1 and -wc2 options are used to select a color palette appropriate to a\n"
+        L"given game.  If neither is specified, -wc1 is assumed.\n"
         L"\n"
         L"The -pack option accepts any number of input files.  Each must be an image file.\n"
         L"The images are converted and packed into an image set of the format expected for\n"
         L"Wing Commander image resources.  Colors are converted to the palette used by\n"
         L"Wing Commander 1.\n"
         L"\n"
-        L"When the -pack option is specified, each image may be followed by a -ref argument\n"
-        L"giving the coordinates of the image's reference point.  The reference point represents\n"
-        L"the logical center of the image for rotation, scaling, and drawing purposes.  If a\n"
-        L"reference point is not specified for an image, then it is as if -ref 0 0 had been\n"
-        L"specified.\n"
-        << '\n';
+        L"When the -pack option is specified, each image may be followed by a -ref\n"
+        L"argument giving the coordinates of the image's reference point.  The reference\n"
+        L"point represents the logical center of the image for rotation, scaling, and\n"
+        L"drawing purposes.  If a reference point is not specified for an image, then it\n"
+        L"is as if -ref 0 0 had been specified.\n";
 }
 
 void extract_images(stdext::multi_ref<stdext::input_stream, stdext::seekable> input, game_id game, const wchar_t* output_path, const wchar_t* prefix)

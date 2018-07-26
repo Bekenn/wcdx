@@ -7,6 +7,7 @@
 #include <stdext/utility.h>
 
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -22,13 +23,6 @@ using namespace std::literals;
 
 namespace
 {
-    enum stream_archive
-    {
-        invalid = -1,
-        wc1_preflight, wc1_postflight, wc1_mission,
-        wc2_gameflow, wc2_gametwo, wc2_spaceflight
-    };
-
     enum : uint32_t
     {
         mode_none           = 0x000,
@@ -61,150 +55,12 @@ namespace
         using runtime_error::runtime_error;
     };
 
-    struct game_trigger_desc
-    {
-        stream_archive archive;
-        uint8_t trigger;
-    };
-
     void show_usage(const wchar_t* invocation);
     void diagnose_mode(uint32_t mode);
     void diagnose_unrecognized(const wchar_t* str);
+    void show_tracks(program_options& options);
     void select_track(program_options& options);
     int parse_int(const wchar_t* str);
-
-    constexpr const wchar_t* stream_filenames[]
-    {
-        L"STREAMS\\PREFLITE.STR",
-        L"STREAMS\\POSFLITE.STR",
-        L"STREAMS\\MISSION.STR",
-        L"STREAMS\\GAMEFLOW.STR",
-        L"STREAMS\\GAMETWO.STR",
-        L"STREAMS\\SPACEFLT.STR"
-    };
-
-    // Maps from a track number to a stream archive and trigger number
-    // See StreamLoadTrack and GetStreamTrack in Wing1.i64
-    constexpr game_trigger_desc wc1_track_map[] =
-    {
-        { stream_archive::wc1_mission, no_trigger },    // 0 - Combat 1
-        { stream_archive::wc1_mission, no_trigger },    // 1 - Combat 2
-        { stream_archive::wc1_mission, no_trigger },    // 2 - Combat 3
-        { stream_archive::wc1_mission, no_trigger },    // 3 - Combat 4
-        { stream_archive::wc1_mission, no_trigger },    // 4 - Combat 5
-        { stream_archive::wc1_mission, no_trigger },    // 5 - Combat 6
-        { stream_archive::wc1_mission, 6 },             // 6 - Victorious combat
-        { stream_archive::wc1_mission, 7 },             // 7 - Tragedy
-        { stream_archive::wc1_mission, 8 },             // 8 - Dire straits
-        { stream_archive::wc1_mission, 9 },             // 9 - Scratch one fighter
-        { stream_archive::wc1_mission, 10 },            // 10 - Defeated fleeing enemy
-        { stream_archive::wc1_mission, 11 },            // 11 - Wingman death
-        { stream_archive::wc1_mission, no_trigger },    // 12 - Returning defeated
-        { stream_archive::wc1_mission, no_trigger },    // 13 - Returning successful
-        { stream_archive::wc1_mission, no_trigger },    // 14 - Returning jubilant
-        { stream_archive::wc1_mission, no_trigger },    // 15 - Mission 1
-        { stream_archive::wc1_mission, no_trigger },    // 16 - Mission 2
-        { stream_archive::wc1_mission, no_trigger },    // 17 - Mission 3
-        { stream_archive::wc1_mission, no_trigger },    // 18 - Mission 4
-        { stream_archive::wc1_preflight, no_trigger },  // 19 - OriginFX (actually, fanfare)
-        { stream_archive::wc1_preflight, 1 },           // 20 - Arcade Mission
-        { stream_archive::wc1_preflight, 4 },           // 21 - Arcade Victory
-        { stream_archive::wc1_preflight, 3 },           // 22 - Arcade Death
-        { stream_archive::wc1_preflight, no_trigger },  // 23 - Fanfare
-        { stream_archive::wc1_preflight, 5 },           // 24 - Halcyon's Office 1
-        { stream_archive::wc1_preflight, 6 },           // 25 - Briefing
-        { stream_archive::wc1_preflight, 7 },           // 26 - Briefing Dismissed
-        { stream_archive::wc1_mission, 27 },            // 27 - Scramble
-        { stream_archive::wc1_postflight, no_trigger }, // 28 - Landing
-        { stream_archive::wc1_postflight, 0, },         // 29 - Damage Assessment
-        { stream_archive::wc1_preflight, 0 },           // 30 - Rec Room
-        { stream_archive::wc1_mission, 31 },            // 31 - Eject
-        { stream_archive::wc1_mission, 32 },            // 32 - Death
-        { stream_archive::wc1_postflight, 2 },          // 33 - debriefing (successful)
-        { stream_archive::wc1_postflight, 1 },          // 34 - debriefing (failed)
-        { stream_archive::wc1_preflight, 2 },           // 35 - barracks
-        { stream_archive::wc1_postflight, 3 },          // 36 - Halcyon's Office / Briefing 2
-        { stream_archive::wc1_postflight, 4 },          // 37 - medal (valor?)
-        { stream_archive::wc1_postflight, 5 },          // 38 - medal (golden sun?)
-        { stream_archive::wc1_postflight, 7 },          // 39 - another medal
-        { stream_archive::wc1_postflight, 6 },          // 40 - big medal
-    };
-
-    constexpr game_trigger_desc wc2_track_map[] =
-    {
-        { stream_archive::wc2_spaceflight, no_trigger },    // 0 - Combat 1
-        { stream_archive::wc2_spaceflight, no_trigger },    // 1 - Combat 2
-        { stream_archive::wc2_spaceflight, no_trigger },    // 2 - Combat 3
-        { stream_archive::wc2_spaceflight, no_trigger },    // 3 - Combat 4
-        { stream_archive::wc2_spaceflight, no_trigger },    // 4 - Combat 5
-        { stream_archive::wc2_spaceflight, no_trigger },    // 5 - Combat 6
-        { stream_archive::wc2_spaceflight, 6 },             // 6 - Victorious Combat
-        { stream_archive::wc2_spaceflight, 7 },             // 7 - Tragedy
-        { stream_archive::wc2_spaceflight, 8 },             // 8 - Dire straits
-        { stream_archive::wc2_spaceflight, 9 },             // 9 - Scratch one fighter
-        { stream_archive::wc2_spaceflight, 10 },            // 10 - Defeated fleeing enemy
-        { stream_archive::wc2_spaceflight, 11 },            // 11 - Wingman death
-        { stream_archive::wc2_spaceflight, no_trigger },    // 12 - Returning defeated
-        { stream_archive::wc2_spaceflight, no_trigger },    // 13 - Returning successful
-        { stream_archive::wc2_spaceflight, no_trigger },    // 14 - Returning jubilant
-        { stream_archive::wc2_spaceflight, no_trigger },    // 15 - Mission 1
-        { stream_archive::wc2_spaceflight, no_trigger },    // 16 - Mission 2
-        { stream_archive::wc2_spaceflight, no_trigger },    // 17 - Mission 3
-        { stream_archive::wc2_spaceflight, no_trigger },    // 18 - Mission 4
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::wc2_spaceflight, no_trigger },    // 27 - Scramble
-        { stream_archive::wc2_gametwo, 28 },                // 28 - Landing
-        { stream_archive::wc2_gametwo, 29 },                // 29 - Damage Assessment
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::wc2_spaceflight, no_trigger },    // 31 - Eject
-        { stream_archive::wc2_spaceflight, no_trigger },    // 32 - Death
-        { stream_archive::wc2_gametwo, 33 },                // 33 - debriefing (successful)
-        { stream_archive::wc2_gametwo, 34 },                // 34 - debriefing (failed)
-        { stream_archive::invalid, no_trigger },
-        { stream_archive::wc2_gametwo, 36 },                // 36 - Briefing 2
-        { stream_archive::wc2_gametwo, 37 },                // 37 - medal (valor?)
-        { stream_archive::wc2_gametwo, 38 },                // 38 - medal (golden sun?)
-        { stream_archive::wc2_gametwo, 39 },                // 39 - another medal
-        { stream_archive::wc2_gametwo, 40 },                // 40 - big medal
-        { stream_archive::wc2_spaceflight, no_trigger },    // 41 - Prologue
-        { stream_archive::wc2_spaceflight, 42 },            // 42 - Torpedo lock
-        { stream_archive::wc2_gameflow, 43 },               // 43 - Flight deck 1
-        { stream_archive::wc2_gameflow, 44 },               // 44 - Angel
-        { stream_archive::wc2_gameflow, 45 },               // 45 - Jazz 1
-        { stream_archive::wc2_gameflow, 46 },               // 46 - Briefing
-        { stream_archive::wc2_gameflow, 47 },               // 47 - Jump
-        { stream_archive::wc2_gameflow, 48 },               // 48 - Prologue (quieter)
-        { stream_archive::wc2_gameflow, 49 },               // 49 - Lounge 1
-        { stream_archive::wc2_gameflow, 50 },               // 50 - Jazz 2
-        { stream_archive::wc2_gameflow, 51 },               // 51 - Jazz 3
-        { stream_archive::wc2_gameflow, 52 },               // 52 - Jazz 4
-        { stream_archive::wc2_gameflow, 53 },               // 53 - Interlude 1
-        { stream_archive::wc2_gameflow, 54 },               // 54 - Theme
-        { stream_archive::wc2_spaceflight, no_trigger },    // 55 - Bombing run
-        { stream_archive::wc2_spaceflight, no_trigger },    // 56 - Final Mission
-        { stream_archive::wc2_spaceflight, no_trigger },    // 57 - Fighting Thrakhath
-        { stream_archive::wc2_gameflow, 58 },               // 58 - Kilrathi Theme
-        { stream_archive::wc2_gametwo, 59 },                // 59 - Good Ending
-        { stream_archive::wc2_gametwo, 60 },                // 60 - Lounge 2
-        { stream_archive::wc2_gameflow, 61 },               // 61 - End Credits
-        { stream_archive::wc2_gameflow, 62 },               // 62 - Interlude 2
-        { stream_archive::wc2_gametwo, 63 },                // 63 - Jazz 5
-        { stream_archive::wc2_gametwo, 20 },                // 64 - Flight Deck 2
-        { stream_archive::wc2_gametwo, 21 },                // 65 - Sabotage
-
-        // Bonus tracks
-        { stream_archive::wc2_gameflow, 59 },               // 66 - Defeated fleeing enemy (alternate)
-        { stream_archive::wc2_gameflow, 60 },               // 67 - Wingman death (alternate)
-        { stream_archive::wc2_gameflow, 63 },               // 68 - Unknown
-        { stream_archive::wc2_spaceflight, no_trigger },    // 69 - Jump (looping)
-    };
 }
 
 int wmain(int argc, wchar_t* argv[])
@@ -251,6 +107,20 @@ int wmain(int argc, wchar_t* argv[])
                     if (value < 0 || unsigned(value) > 0xFF)
                         throw usage_error("Trigger must be between 0 and 255.");
                     options.trigger = uint8_t(value);
+                }
+                else if (*arg + 1 == L"show-tracks"sv)
+                {
+                    if ((options.program_mode & mode_show_tracks) != 0)
+                        throw usage_error("The -show-tracks option can only be used once.");
+
+                    options.program_mode |= mode_show_tracks;
+                    diagnose_mode(options.program_mode);
+
+                    auto game = *++arg;
+                    if (game == L"wc2"sv)
+                        options.program_mode |= mode_wc2;
+                    else if (game != L"wc1"sv)
+                        throw usage_error("The -show-tracks option must be followed by 'wc1' or 'wc2'.");
                 }
                 else if (*arg + 1 == L"show-triggers"sv)
                 {
@@ -330,6 +200,12 @@ int wmain(int argc, wchar_t* argv[])
         if ((options.program_mode & (mode_track | mode_stream | mode_show_tracks | mode_show_triggers)) == 0)
             throw usage_error("Missing required options.");
 
+        if ((options.program_mode & mode_show_tracks) != 0)
+        {
+            show_tracks(options);
+            return EXIT_SUCCESS;
+        }
+
         if ((options.program_mode & mode_track) != 0)
             select_track(options);
 
@@ -389,6 +265,9 @@ int wmain(int argc, wchar_t* argv[])
                 std::cout << "End of stream" << std::endl;
         });
 
+        if ((options.program_mode & mode_wav) == 0)
+            std::cout << "Press Ctrl-C to end playback." << std::endl;
+
         stream.select(options.trigger, options.intensity);
 
         if ((options.program_mode & mode_wav) != 0)
@@ -422,20 +301,165 @@ int wmain(int argc, wchar_t* argv[])
 
 namespace
 {
+    enum stream_archive
+    {
+        invalid = -1,
+        wc1_preflight, wc1_postflight, wc1_mission,
+        wc2_gameflow, wc2_gametwo, wc2_spaceflight
+    };
+
+    struct track_desc
+    {
+        stream_archive archive;
+        uint8_t trigger;
+    };
+
+    constexpr const wchar_t* stream_filenames[]
+    {
+        L"STREAMS\\PREFLITE.STR",
+        L"STREAMS\\POSFLITE.STR",
+        L"STREAMS\\MISSION.STR",
+        L"STREAMS\\GAMEFLOW.STR",
+        L"STREAMS\\GAMETWO.STR",
+        L"STREAMS\\SPACEFLT.STR"
+    };
+
+    // Maps from a track number to a stream archive and trigger number
+    // See StreamLoadTrack and GetStreamTrack in Wing1.i64
+    constexpr track_desc wc1_track_map[] =
+    {
+        { stream_archive::wc1_mission, no_trigger },    // 0 - Combat 1
+        { stream_archive::wc1_mission, no_trigger },    // 1 - Combat 2
+        { stream_archive::wc1_mission, no_trigger },    // 2 - Combat 3
+        { stream_archive::wc1_mission, no_trigger },    // 3 - Combat 4
+        { stream_archive::wc1_mission, no_trigger },    // 4 - Combat 5
+        { stream_archive::wc1_mission, no_trigger },    // 5 - Combat 6
+        { stream_archive::wc1_mission, 6 },             // 6 - Victorious combat
+        { stream_archive::wc1_mission, 7 },             // 7 - Tragedy
+        { stream_archive::wc1_mission, 8 },             // 8 - Dire straits
+        { stream_archive::wc1_mission, 9 },             // 9 - Scratch one fighter
+        { stream_archive::wc1_mission, 10 },            // 10 - Defeated fleeing enemy
+        { stream_archive::wc1_mission, 11 },            // 11 - Wingman death
+        { stream_archive::wc1_mission, no_trigger },    // 12 - Returning defeated
+        { stream_archive::wc1_mission, no_trigger },    // 13 - Returning successful
+        { stream_archive::wc1_mission, no_trigger },    // 14 - Returning jubilant
+        { stream_archive::wc1_mission, no_trigger },    // 15 - Mission 1
+        { stream_archive::wc1_mission, no_trigger },    // 16 - Mission 2
+        { stream_archive::wc1_mission, no_trigger },    // 17 - Mission 3
+        { stream_archive::wc1_mission, no_trigger },    // 18 - Mission 4
+        { stream_archive::wc1_preflight, no_trigger },  // 19 - OriginFX (actually, fanfare)
+        { stream_archive::wc1_preflight, 1 },           // 20 - Arcade Mission
+        { stream_archive::wc1_preflight, 4 },           // 21 - Arcade Victory
+        { stream_archive::wc1_preflight, 3 },           // 22 - Arcade Death
+        { stream_archive::wc1_preflight, no_trigger },  // 23 - Fanfare
+        { stream_archive::wc1_preflight, 5 },           // 24 - Halcyon's Office 1
+        { stream_archive::wc1_preflight, 6 },           // 25 - Briefing
+        { stream_archive::wc1_preflight, 7 },           // 26 - Briefing Dismissed
+        { stream_archive::wc1_mission, 27 },            // 27 - Scramble
+        { stream_archive::wc1_postflight, no_trigger }, // 28 - Landing
+        { stream_archive::wc1_postflight, 0, },         // 29 - Damage Assessment
+        { stream_archive::wc1_preflight, 0 },           // 30 - Rec Room
+        { stream_archive::wc1_mission, 31 },            // 31 - Eject
+        { stream_archive::wc1_mission, 32 },            // 32 - Death
+        { stream_archive::wc1_postflight, 2 },          // 33 - debriefing (successful)
+        { stream_archive::wc1_postflight, 1 },          // 34 - debriefing (failed)
+        { stream_archive::wc1_preflight, 2 },           // 35 - barracks
+        { stream_archive::wc1_postflight, 3 },          // 36 - Halcyon's Office / Briefing 2
+        { stream_archive::wc1_postflight, 4 },          // 37 - medal (valor?)
+        { stream_archive::wc1_postflight, 5 },          // 38 - medal (golden sun?)
+        { stream_archive::wc1_postflight, 7 },          // 39 - another medal
+        { stream_archive::wc1_postflight, 6 },          // 40 - big medal
+    };
+
+    constexpr track_desc wc2_track_map[] =
+    {
+        { stream_archive::wc2_spaceflight, no_trigger },    // 0 - Combat 1
+        { stream_archive::wc2_spaceflight, no_trigger },    // 1 - Combat 2
+        { stream_archive::wc2_spaceflight, no_trigger },    // 2 - Combat 3
+        { stream_archive::wc2_spaceflight, no_trigger },    // 3 - Combat 4
+        { stream_archive::wc2_spaceflight, no_trigger },    // 4 - Combat 5
+        { stream_archive::wc2_spaceflight, no_trigger },    // 5 - Combat 6
+        { stream_archive::wc2_spaceflight, 6 },             // 6 - Victorious Combat
+        { stream_archive::wc2_spaceflight, 7 },             // 7 - Tragedy
+        { stream_archive::wc2_spaceflight, 8 },             // 8 - Dire straits
+        { stream_archive::wc2_spaceflight, 9 },             // 9 - Scratch one fighter
+        { stream_archive::wc2_spaceflight, 10 },            // 10 - Defeated fleeing enemy
+        { stream_archive::wc2_spaceflight, 11 },            // 11 - Wingman death
+        { stream_archive::wc2_spaceflight, no_trigger },    // 12 - Returning defeated
+        { stream_archive::wc2_spaceflight, no_trigger },    // 13 - Returning successful
+        { stream_archive::wc2_spaceflight, no_trigger },    // 14 - Returning jubilant
+        { stream_archive::wc2_spaceflight, no_trigger },    // 15 - Mission 1
+        { stream_archive::wc2_spaceflight, no_trigger },    // 16 - Mission 2
+        { stream_archive::wc2_spaceflight, no_trigger },    // 17 - Mission 3
+        { stream_archive::wc2_spaceflight, no_trigger },    // 18 - Mission 4
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::wc2_spaceflight, no_trigger },    // 27 - Scramble
+        { stream_archive::wc2_gametwo, 28 },                // 28 - Landing
+        { stream_archive::wc2_gametwo, 29 },                // 29 - Damage Assessment
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::wc2_spaceflight, no_trigger },    // 31 - Eject
+        { stream_archive::wc2_spaceflight, no_trigger },    // 32 - Death
+        { stream_archive::wc2_gametwo, 33 },                // 33 - debriefing (successful)
+        { stream_archive::wc2_gametwo, 34 },                // 34 - debriefing (failed)
+        { stream_archive::invalid, no_trigger },
+        { stream_archive::wc2_gametwo, 36 },                // 36 - Briefing 2
+        { stream_archive::wc2_gametwo, 37 },                // 37 - medal (valor?)
+        { stream_archive::wc2_gametwo, 38 },                // 38 - medal (golden sun?)
+        { stream_archive::wc2_gametwo, 39 },                // 39 - another medal
+        { stream_archive::wc2_gametwo, 40 },                // 40 - big medal
+        { stream_archive::wc2_spaceflight, no_trigger },    // 41 - Prologue
+        { stream_archive::wc2_spaceflight, 42 },            // 42 - Torpedo lock
+        { stream_archive::wc2_gameflow, 43 },               // 43 - Flight deck 1
+        { stream_archive::wc2_gameflow, 44 },               // 44 - Angel
+        { stream_archive::wc2_gameflow, 45 },               // 45 - Jazz 1
+        { stream_archive::wc2_gameflow, 46 },               // 46 - Briefing
+        { stream_archive::wc2_gameflow, 47 },               // 47 - Jump
+        { stream_archive::wc2_gameflow, 48 },               // 48 - Prologue (quieter)
+        { stream_archive::wc2_gameflow, 49 },               // 49 - Lounge 1
+        { stream_archive::wc2_gameflow, 50 },               // 50 - Jazz 2
+        { stream_archive::wc2_gameflow, 51 },               // 51 - Jazz 3
+        { stream_archive::wc2_gameflow, 52 },               // 52 - Jazz 4
+        { stream_archive::wc2_gameflow, 53 },               // 53 - Interlude 1
+        { stream_archive::wc2_gameflow, 54 },               // 54 - Theme
+        { stream_archive::wc2_spaceflight, no_trigger },    // 55 - Bombing run
+        { stream_archive::wc2_spaceflight, no_trigger },    // 56 - Final Mission
+        { stream_archive::wc2_spaceflight, no_trigger },    // 57 - Fighting Thrakhath
+        { stream_archive::wc2_gameflow, 58 },               // 58 - Kilrathi Theme
+        { stream_archive::wc2_gametwo, 59 },                // 59 - Good Ending
+        { stream_archive::wc2_gametwo, 60 },                // 60 - Lounge 2
+        { stream_archive::wc2_gameflow, 61 },               // 61 - End Credits
+        { stream_archive::wc2_gameflow, 62 },               // 62 - Interlude 2
+        { stream_archive::wc2_gametwo, 63 },                // 63 - Jazz 5
+        { stream_archive::wc2_gametwo, 20 },                // 64 - Flight Deck 2
+        { stream_archive::wc2_gametwo, 21 },                // 65 - Sabotage
+
+        // Bonus tracks
+        { stream_archive::wc2_gameflow, 59 },               // 66 - Defeated fleeing enemy (alternate)
+        { stream_archive::wc2_gameflow, 60 },               // 67 - Wingman death (alternate)
+        { stream_archive::wc2_gameflow, 63 },               // 68 - Unknown
+        { stream_archive::wc2_spaceflight, no_trigger },    // 69 - Jump (looping)
+    };
+
     void show_usage(const wchar_t* invocation)
     {
         std::wcout << L"Usage:\n"
             L"  " << invocation << L" [<options>...] -track (wc1|wc2) <num>\n"
             L"  " << invocation << L" [<options>...] -trigger <num> <filename>\n"
-            L"  " << invocation << L" -show-tracks\n"
+            L"  " << invocation << L" -show-tracks (wc1|wc2)\n"
             L"  " << invocation << L" -show-triggers <filename>\n"
             L"\n"
             L"The first form selects a music track to play.  The command must be invoked from\n"
             L"the game directory (the same directory containing the STREAMS directory).  The\n"
             L"correct stream file will be loaded automatically based on an internal mapping\n"
             L"from track number to stream file, trigger, and intensity values.  To view the\n"
-            L"mapping, use the -show-tracks option.  Currently, tracks are only supported for\n"
-            L"WC1.\n"
+            L"mapping, use the -show-tracks option.\n"
             L"\n"
             L"The second form selects a track using the provided trigger value for the given\n"
             L"stream file.  If the trigger is not provided, " << invocation << L" will play from the\n"
@@ -495,9 +519,48 @@ namespace
         throw usage_error(std::move(message).str());
     }
 
+    void show_tracks(program_options& options)
+    {
+        stdext::const_array_view<track_desc> track_map;
+        if ((options.program_mode & mode_wc2) == 0)
+            track_map = wc1_track_map;
+        else
+            track_map = wc2_track_map;
+
+        std::wcout <<
+            L"Track |         File         | Trigger | Intensity\n"
+            L"------|----------------------|---------|----------\n";
+        unsigned track_number = 0;
+        for (auto entry : track_map)
+        {
+            at_scope_exit([&]{ ++track_number; });
+            if (entry.archive == stream_archive::invalid)
+                continue;
+
+            std::wcout << std::setw(5) << track_number << L" | ";
+            std::wcout << std::setw(20) << std::setiosflags(std::ios_base::left) << stream_filenames[entry.archive] << L" | ";
+
+            std::wcout.unsetf(std::ios_base::adjustfield);
+            std::wcout.width(7);
+            if (entry.trigger == no_trigger)
+                std::wcout << L"";
+            else
+                std::wcout << entry.trigger;
+            std::wcout << L" | ";
+
+            std::wcout.width(9);
+            if (entry.trigger == no_trigger)
+                std::wcout << (track_number == 69 ? 47 : track_number);
+            else
+                std::wcout << L"";
+
+            std::wcout << L'\n';
+        }
+    }
+
     void select_track(program_options& options)
     {
-        stdext::const_array_view<game_trigger_desc> track_map;
+        stdext::const_array_view<track_desc> track_map;
         if ((options.program_mode & mode_wc2) == 0)
             track_map = wc1_track_map;
         else

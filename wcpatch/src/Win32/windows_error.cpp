@@ -9,7 +9,7 @@
 static std::string convert(const std::wstring& str);
 static std::wstring convert(const std::string& str);
 
-const windows_error_category& windows_category() _NOEXCEPT
+const windows_error_category& windows_category() noexcept
 {
     static windows_error_category category;
     return category;

@@ -518,9 +518,9 @@ ATOM Wcdx::FrameWindowClass()
     static const ATOM windowClass = []
     {
         // Create an empty cursor.
-        BYTE and = 0xFF;
-        BYTE xor = 0;
-        auto hcursor = ::CreateCursor(DllInstance, 0, 0, 1, 1, &and, &xor);
+        BYTE and_mask = 0xFF;
+        BYTE xor_mask = 0;
+        auto hcursor = ::CreateCursor(DllInstance, 0, 0, 1, 1, &and_mask, &xor_mask);
         if (hcursor == nullptr)
             throw std::system_error(::GetLastError(), std::system_category());
 

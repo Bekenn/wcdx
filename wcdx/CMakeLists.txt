@@ -10,6 +10,7 @@ set(MIDL_GENERATED_SOURCES
 )
 
 add_library(wcdx SHARED)
+set_target_properties(wcdx PROPERTIES WIN32_EXECUTABLE true)
 target_compile_definitions(wcdx PRIVATE WCDX_EXPORTS _UNICODE _SCL_SECURE_NO_WARNINGS)
 target_include_directories(wcdx PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
 target_link_libraries(wcdx PRIVATE stdext d3d9 RpcRT4)

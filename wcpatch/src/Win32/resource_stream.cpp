@@ -7,11 +7,14 @@
 #include <map>
 
 
-struct resource
+namespace
 {
-    void* data;
-    size_t size;
-};
+    struct resource
+    {
+        uint8_t* data;
+        size_t size;
+    };
+}
 
 struct resource_stream::impl
 {
@@ -55,7 +58,7 @@ resource_stream::impl::impl(uint32_t id) : id(id)
         HGLOBAL hdata = ::LoadResource(module, hres);
         if (hdata == nullptr)
             throw windows_error();
-        resource _res = { ::LockResource(hdata), ::SizeofResource(module, hres) };
+        resource _res = { static_cast<uint8_t*>(::LockResource(hdata)), ::SizeofResource(module, hres) };
         if ((_res.size == 0) && ::GetLastError() != ERROR_SUCCESS)
             throw windows_error();
         if (_res.data == nullptr)

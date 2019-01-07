@@ -9,7 +9,7 @@ project(wcdx)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
-    add_compile_options(/MP)
+    add_compile_options(/MP /permissive-)
 endif()
 
 add_subdirectory(stdext)

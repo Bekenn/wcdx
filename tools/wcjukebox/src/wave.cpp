@@ -61,7 +61,7 @@ void write_wave(seekable_output_stream_ref out, stdext::input_stream& in, uint16
             size_t bytes;
             do
             {
-                bytes = direct_writer->direct_write([&in](uint8_t* buffer, size_t size)
+                bytes = direct_writer->direct_write([&in](std::byte* buffer, size_t size)
                 {
                     return in.read(buffer, size);
                 });
@@ -72,7 +72,7 @@ void write_wave(seekable_output_stream_ref out, stdext::input_stream& in, uint16
             size_t bytes;
             do
             {
-                bytes = direct_reader->direct_read([&stream](const uint8_t* buffer, size_t size)
+                bytes = direct_reader->direct_read([&stream](const std::byte* buffer, size_t size)
                 {
                     return stream.write(buffer, size);
                 });
@@ -81,13 +81,13 @@ void write_wave(seekable_output_stream_ref out, stdext::input_stream& in, uint16
         else
         {
             buffer_size = std::max(buffer_size, size_t(0x1000));
-            auto buffer = std::make_unique<uint8_t[]>(buffer_size);
+            auto buffer = std::make_unique<std::byte[]>(buffer_size);
 
             size_t bytes;
             do
             {
                 bytes = in.read(buffer.get(), buffer_size);
-                stream.write(buffer.get(), bytes);
+                stream.write_all(buffer.get(), bytes);
             } while (bytes != 0);
         }
     }

@@ -19,7 +19,7 @@ md5_hash::md5_hash(const void* data, size_t size)
         throw windows_error();
     at_scope_exit([&]{ ::CryptDestroyHash(hash); });
 
-    if (!::CryptHashData(hash, static_cast<const BYTE*>(data), size, 0))
+    if (!::CryptHashData(hash, static_cast<const BYTE*>(data), DWORD(size), 0))
         throw windows_error();
 
     DWORD hash_size;

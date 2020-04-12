@@ -68,6 +68,7 @@ int wmain(int argc, wchar_t* argv[])
         const wchar_t* output_path = nullptr;
         bool headers_only = false;
 
+        stdext::discard(argc);
         for (const wchar_t* const* arg = argv + 1; *arg != nullptr; ++arg)
         {
             switch (**arg)
@@ -109,14 +110,14 @@ int wmain(int argc, wchar_t* argv[])
         }
 
         // Read the input file into an in-memory buffer.
-        std::vector<uint8_t> file_buffer;
+        std::vector<std::byte> file_buffer;
         {
             stdext::file_input_stream input_file(input_path);
             input_file.seek(stdext::seek_from::end, 0);
             size_t size = size_t(input_file.position());
             file_buffer.resize(size);
             input_file.seek(stdext::seek_from::begin, 0);
-            input_file.read(file_buffer.data(), file_buffer.size());
+            input_file.read_all(file_buffer.data(), file_buffer.size());
         }
 
         auto hash = md5_hash(file_buffer.data(), file_buffer.size());
@@ -131,7 +132,13 @@ int wmain(int argc, wchar_t* argv[])
             return EXIT_FAILURE;
 
         stdext::file_output_stream output_file(output_path);
-        output_file.write(file_buffer.data(), file_buffer.size());
+        if (output_file.write(file_buffer.data(), file_buffer.size()) != file_buffer.size())
+        {
+            std::cerr << "Error writing to output file.\n";
+            show_usage(argv[0]);
+            return EXIT_FAILURE;
+        }
+
         return EXIT_SUCCESS;
     }
     catch (const std::exception& e)
@@ -172,6 +179,11 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
     // Read number of sections
     seekable.seek(stdext::seek_from::current, 2);
     auto section_count = stream.read<uint16_t>();
+    if (section_count == 0)
+    {
+        std::wcerr << L"Error: Input file has no sections.\n";
+        return false;
+    }
 
     // Read optional header size
     seekable.seek(stdext::seek_from::current, 12);
@@ -219,12 +231,21 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
     else
         seekable.seek(stdext::seek_from::current, header_size - 96);    // Skip to the section tables.
 
-    section_header_t section_header;
-    for (unsigned section_header_index = 0; section_header_index < section_count; ++section_header_index)
+    section_header_t section_header = { };  // shouldn't have to initialize here, but MSVC issues C4701 if I don't
     {
-        section_header = stream.read<section_header_t>();
-        if (strcmp(section_header.name, ".idata") == 0)
-            break;
+        unsigned section_header_index = 0;
+        for (; section_header_index < section_count; ++section_header_index)
+        {
+            section_header = stream.read<section_header_t>();
+            if (strcmp(section_header.name, ".idata") == 0)
+                break;
+        }
+
+        if (section_header_index == section_count)
+        {
+            std::wcerr << L"Error: Input file has no imports.\n";
+            return false;
+        }
     }
 
     // Skip to the import tables.
@@ -240,7 +261,10 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
     {
         import_entry = stream.read<import_entry_t>();
         if (memcmp(&import_entry, &import_entry_null, sizeof(import_entry_t)) == 0)
+        {
+            std::wcerr << L"Error: Input file does not import ddraw.dll.\n";
             return false;
+        }
 
         auto import_entry_position = seekable.position();
         seekable.seek(stdext::seek_from::begin, section_header.raw_data_offset + import_entry.dllname_virtual_address - idata_base_rva);
@@ -252,7 +276,7 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
         {
             seekable.set_position(import_name_position);
             const char import_name[] = "wcdx.dll";
-            stream.write(import_name);
+            stream.write_all(import_name);
             break;
         }
 
@@ -261,14 +285,20 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
 
     seekable.seek(stdext::seek_from::begin, section_header.raw_data_offset + import_entry.lookup_virtual_address - idata_base_rva);
     if (pe_type_signature != OptionalHeader_PE32Signature)
+    {
+        std::wcerr << L"Error: Input file missing PE32 signature.\n";
         return false;
+    }
 
     stdext::stream_position lookup_position = 0;
     while (true)
     {
         auto lookup = stream.read<uint32_t>();
         if (lookup == 0)
+        {
+            std::wcerr << L"Error: Input file does not import DirectDrawCreate.\n";
             return false;
+        }
 
         if ((lookup & 0x80000000) == 0)
         {
@@ -288,12 +318,11 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
         }
     }
 
-    if (lookup_position == 0)
-        return false;
+    assert(lookup_position != 0);
 
     stream.write(uint16_t(0));
     const char function_name[] = "WcdxCreate";
-    stream.write(function_name);
+    stream.write_all(function_name);
 
     seekable.set_position(lookup_position);
     stream.write(0);
@@ -354,13 +383,13 @@ bool apply_dif(stdext::multi_ref<stdext::stream, stdext::seekable> file_data, ui
             continue;
 
         uint32_t offset = stoul(address_str, nullptr, 16);
-        uint8_t original_value = uint8_t(stoul(original_value_str, nullptr, 16));
-        uint8_t replacement_value = uint8_t(stoul(replacement_value_str, nullptr, 16));
+        auto original_value = std::byte(stoul(original_value_str, nullptr, 16));
+        auto replacement_value = std::byte(stoul(replacement_value_str, nullptr, 16));
 
         auto& stream = file_data.as<stdext::stream>();
         auto& seekable = file_data.as<stdext::seekable>();
         seekable.seek(stdext::seek_from::begin, offset);
-        auto value = stream.read<uint8_t>();
+        auto value = stream.read<std::byte>();
         if (value != original_value)
             return false;
         seekable.seek(stdext::seek_from::current, -1);

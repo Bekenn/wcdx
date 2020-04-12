@@ -2,7 +2,7 @@
 
 HINSTANCE DllInstance;
 
-BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, LPVOID lpvReserved)
+BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, [[maybe_unused]] LPVOID lpvReserved)
 {
     switch (fdwReason)
     {

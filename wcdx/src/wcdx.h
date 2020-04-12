@@ -82,26 +82,26 @@ private:
     void ConfineCursor();
 
 private:
-    ULONG refCount;
-    SmartResource<HWND> window;
-    HMONITOR monitor;
-    WNDPROC clientWindowProc;
-    DWORD frameStyle;
-    DWORD frameExStyle;
-    RECT frameRect;
+    ULONG _refCount;
+    SmartResource<HWND> _window;
+    HMONITOR _monitor;
+    WNDPROC _clientWindowProc;
+    DWORD _frameStyle;
+    DWORD _frameExStyle;
+    RECT _frameRect;
 
-    IDirect3D9Ptr d3d;
-    IDirect3DDevice9Ptr device;
-    IDirect3DSurface9Ptr surface;
+    IDirect3D9Ptr _d3d;
+    IDirect3DDevice9Ptr _device;
+    IDirect3DSurface9Ptr _surface;
 
-    D3DPRESENT_PARAMETERS presentParams;
+    D3DPRESENT_PARAMETERS _presentParams;
 
-    WcdxColor palette[256];
-    BYTE framebuffer[ContentWidth * ContentHeight];
+    WcdxColor _palette[256];
+    BYTE _framebuffer[ContentWidth * ContentHeight];
 
-    bool fullScreen;
-    bool dirty;
-    bool sizeChanged;
+    bool _fullScreen;
+    bool _dirty;
+    bool _sizeChanged;
 };
 
 #endif

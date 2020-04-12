@@ -18,7 +18,10 @@
 // GDI+ headers use unqualified min and max (probably expecting the Windows macros)
 using std::min;
 using std::max;
+#pragma warning(push)
+#pragma warning(disable: 4458)  // declaration of 'nativeCap' hides class member
 #include <gdiplus.h>
+#pragma warning(pop)
 
 
 using namespace Gdiplus;
@@ -42,6 +45,8 @@ static size_t ImageIndex = 0;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCommandLine, int nCmdShow)
 {
+    stdext::discard(hInstance, hPrevInstance, lpCommandLine, nCmdShow);
+
     try
     {
         ULONG_PTR gdiplusToken;
@@ -76,7 +81,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpComma
 
         wcdx->Release();
         ::CoUninitialize();
-        return message.wParam;
+        return int(message.wParam);
     }
     catch (const _com_error& error)
     {
@@ -107,7 +112,7 @@ void ShowImage(IWcdx* wcdx, Bitmap& image)
 {
     std::vector<BYTE> paletteData(image.GetPaletteSize());
     ColorPalette& palette = *reinterpret_cast<ColorPalette*>(paletteData.data());
-    image.GetPalette(&palette, paletteData.size());
+    image.GetPalette(&palette, INT(paletteData.size()));
 
     assert(palette.Count == 256);
     wcdx->SetPalette(reinterpret_cast<WcdxColor*>(palette.Entries));
@@ -123,17 +128,22 @@ void ShowImage(IWcdx* wcdx, Bitmap& image)
 
 void OnDestroy(HWND window)
 {
+    stdext::discard(window);
     ::PostQuitMessage(EXIT_SUCCESS);
 }
 
 void OnShowWindow(HWND window, bool show, DWORD reason)
 {
+    stdext::discard(reason);
+
     if (show)
         ::PostMessage(window, WM_APP_RENDER, 0, 0);
 }
 
 void OnLButtonUp(HWND window, WORD x, WORD y, DWORD flags)
 {
+    stdext::discard(x, y, flags);
+
     IWcdx* wcdx = reinterpret_cast<IWcdx*>(::GetWindowLongPtr(window, GWLP_USERDATA));
     if (++ImageIndex == Images->size())
         ImageIndex = 0;
@@ -163,11 +173,11 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_SHOWWINDOW:
-        OnShowWindow(hWnd, wParam != FALSE, lParam);
+        OnShowWindow(hWnd, wParam != FALSE, DWORD(lParam));
         break;
 
     case WM_LBUTTONUP:
-        OnLButtonUp(hWnd, LOWORD(lParam), HIWORD(lParam), wParam);
+        OnLButtonUp(hWnd, LOWORD(lParam), HIWORD(lParam), DWORD(wParam));
         break;
 
     case WM_APP_RENDER:

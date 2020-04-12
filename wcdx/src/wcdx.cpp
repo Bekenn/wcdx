@@ -29,11 +29,11 @@ static HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
 
 static bool CreateDirectoryRecursive(LPWSTR pathName);
 
-WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScreen)
+WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL _fullScreen)
 {
     try
     {
-        return new Wcdx(windowTitle, windowProc, fullScreen != FALSE);
+        return new Wcdx(windowTitle, windowProc, _fullScreen != FALSE);
     }
     catch (const _com_error&)
     {
@@ -41,27 +41,27 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL fullScre
     }
 }
 
-Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen)
-    : refCount(1), monitor(nullptr), clientWindowProc(windowProc), frameStyle(WS_OVERLAPPEDWINDOW), frameExStyle(WS_EX_OVERLAPPEDWINDOW)
-    , fullScreen(false), dirty(false), sizeChanged(false)
+Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool _fullScreen)
+    : _refCount(1), _monitor(nullptr), _clientWindowProc(windowProc), _frameStyle(WS_OVERLAPPEDWINDOW), _frameExStyle(WS_EX_OVERLAPPEDWINDOW)
+    , _fullScreen(false), _dirty(false), _sizeChanged(false)
 {
     // Create the window.
-    auto hwnd = ::CreateWindowEx(frameExStyle,
+    auto hwnd = ::CreateWindowEx(_frameExStyle,
         reinterpret_cast<LPCWSTR>(FrameWindowClass()), title,
-        frameStyle,
+        _frameStyle,
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
         nullptr, nullptr, DllInstance, this);
     if (hwnd == nullptr)
         throw std::system_error(::GetLastError(), std::system_category());
-    window.Reset(hwnd, &::DestroyWindow);
+    _window.Reset(hwnd, &::DestroyWindow);
 
     // Force 4:3 aspect ratio.
-    ::GetWindowRect(window, &frameRect);
-    OnSizing(WMSZ_TOP, &frameRect);
-    ::MoveWindow(window, frameRect.left, frameRect.top, frameRect.right - frameRect.left, frameRect.bottom - frameRect.top, FALSE);
+    ::GetWindowRect(_window, &_frameRect);
+    OnSizing(WMSZ_TOP, &_frameRect);
+    ::MoveWindow(_window, _frameRect.left, _frameRect.top, _frameRect.right - _frameRect.left, _frameRect.bottom - _frameRect.top, FALSE);
 
     // Initialize D3D.
-    d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
+    _d3d = ::Direct3DCreate9(D3D_SDK_VERSION);
 
     // Find the adapter corresponding to the window.
     HRESULT hr;
@@ -73,9 +73,9 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool fullScreen)
         _com_raise_error(hr);
 
     WcdxColor defColor = { 0, 0, 0, 0xFF };
-    std::fill_n(palette, stdext::lengthof(palette), defColor);
+    std::fill_n(_palette, stdext::lengthof(_palette), defColor);
 
-    SetFullScreen(IsDebuggerPresent() ? false : fullScreen);
+    SetFullScreen(IsDebuggerPresent() ? false : _fullScreen);
 }
 
 Wcdx::~Wcdx() = default;
@@ -88,13 +88,13 @@ HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
     if (IsEqualIID(riid, IID_IUnknown))
     {
         *reinterpret_cast<IUnknown**>(ppvObject) = this;
-        ++refCount;
+        ++_refCount;
         return S_OK;
     }
     if (IsEqualIID(riid, IID_IWcdx))
     {
         *reinterpret_cast<IWcdx**>(ppvObject) = this;
-        ++refCount;
+        ++_refCount;
         return S_OK;
     }
 
@@ -103,40 +103,40 @@ HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
 
 ULONG STDMETHODCALLTYPE Wcdx::AddRef()
 {
-    return ++refCount;
+    return ++_refCount;
 }
 
 ULONG STDMETHODCALLTYPE Wcdx::Release()
 {
-    if (--refCount == 0)
+    if (--_refCount == 0)
     {
         delete this;
         return 0;
     }
 
-    return refCount;
+    return _refCount;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetVisible(BOOL visible)
 {
-    ::ShowWindow(window, visible ? SW_SHOW : SW_HIDE);
+    ::ShowWindow(_window, visible ? SW_SHOW : SW_HIDE);
     if (visible)
-        ::PostMessage(window, WM_APP_RENDER, 0, 0);
+        ::PostMessage(_window, WM_APP_RENDER, 0, 0);
 
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::SetPalette(const WcdxColor entries[256])
 {
-    std::copy_n(entries, 256, palette);
-    dirty = true;
+    std::copy_n(entries, 256, _palette);
+    _dirty = true;
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::UpdatePalette(UINT index, const WcdxColor* entry)
 {
-    palette[index] = *entry;
-    dirty = true;
+    _palette[index] = *entry;
+    _dirty = true;
     return S_OK;
 }
 
@@ -152,7 +152,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
     };
 
     auto src = static_cast<const BYTE*>(bits);
-    auto dest = framebuffer + clipped.left + (ContentWidth * clipped.top);
+    auto dest = _framebuffer + clipped.left + (ContentWidth * clipped.top);
     width = clipped.right - clipped.left;
     for (height = clipped.bottom - clipped.top; height-- > 0; )
     {
@@ -160,14 +160,14 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
         src += pitch;
         dest += ContentWidth;
     }
-    dirty = true;
+    _dirty = true;
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::Present()
 {
     HRESULT hr;
-    if (FAILED(hr = device->TestCooperativeLevel()))
+    if (FAILED(hr = _device->TestCooperativeLevel()))
     {
         if (hr != D3DERR_DEVICENOTRESET)
             return hr;
@@ -177,33 +177,33 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
     }
 
     RECT clientRect;
-    ::GetClientRect(window, &clientRect);
+    ::GetClientRect(_window, &clientRect);
 
-    if (FAILED(hr = device->BeginScene()))
+    if (FAILED(hr = _device->BeginScene()))
         return hr;
     {
-        at_scope_exit([&]{ device->EndScene(); });
+        at_scope_exit([&]{ _device->EndScene(); });
 
         IDirect3DSurface9Ptr backBuffer;
-        if (FAILED(hr = device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+        if (FAILED(hr = _device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
             return hr;
 
-        if (dirty)
+        if (_dirty)
         {
             D3DLOCKED_RECT locked;
             RECT bounds = { 0, 0, ContentWidth, ContentHeight };
-            if (FAILED(hr = surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
+            if (FAILED(hr = _surface->LockRect(&locked, &bounds, D3DLOCK_DISCARD)))
                 return hr;
             {
-                at_scope_exit([&]{ surface->UnlockRect(); });
+                at_scope_exit([&]{ _surface->UnlockRect(); });
 
-                const BYTE* src = framebuffer;
+                const BYTE* src = _framebuffer;
                 auto dest = static_cast<WcdxColor*>(locked.pBits);
                 for (int row = 0; row < ContentHeight; ++row)
                 {
                     std::transform(src, src + ContentWidth, dest, [&](BYTE index)
                     {
-                        return palette[index];
+                        return _palette[index];
                     });
 
                     src += ContentWidth;
@@ -213,7 +213,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
         }
 
         RECT activeRect = GetContentRect(clientRect);
-        if (sizeChanged)
+        if (_sizeChanged)
         {
             if (activeRect.right - activeRect.left < clientRect.right - clientRect.left)
             {
@@ -222,7 +222,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
                     { clientRect.left, clientRect.top, activeRect.left, activeRect.bottom },
                     { activeRect.right, activeRect.top, clientRect.right, clientRect.bottom }
                 };
-                if (FAILED(hr = device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
+                if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
                     return hr;
             }
             else if (activeRect.bottom - activeRect.top < clientRect.bottom - clientRect.top)
@@ -232,21 +232,21 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
                     { clientRect.left, clientRect.top, activeRect.right, activeRect.top },
                     { activeRect.left, activeRect.bottom, clientRect.right, clientRect.bottom }
                 };
-                if (FAILED(hr = device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
+                if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
                     return hr;
             }
         }
 
-        if (dirty || sizeChanged)
+        if (_dirty || _sizeChanged)
         {
-            if (FAILED(hr = device->StretchRect(surface, nullptr, backBuffer, &activeRect, D3DTEXF_POINT)))
+            if (FAILED(hr = _device->StretchRect(_surface, nullptr, backBuffer, &activeRect, D3DTEXF_POINT)))
                 return hr;
-            dirty = false;
-            sizeChanged = false;
+            _dirty = false;
+            _sizeChanged = false;
         }
     }
 
-    if (FAILED(hr = device->Present(&clientRect, nullptr, nullptr, nullptr)))
+    if (FAILED(hr = _device->Present(&clientRect, nullptr, nullptr, nullptr)))
         return hr;
 
     return S_OK;
@@ -254,7 +254,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 
 HRESULT STDMETHODCALLTYPE Wcdx::IsFullScreen()
 {
-    return fullScreen ? S_OK : S_FALSE;
+    return _fullScreen ? S_OK : S_FALSE;
 }
 
 HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToClient(POINT* point)
@@ -263,7 +263,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToClient(POINT* point)
         return E_POINTER;
 
     RECT viewRect;
-    if (!::GetClientRect(window, &viewRect))
+    if (!::GetClientRect(_window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
     *point = ConvertTo(*point, GetContentRect(viewRect));
@@ -276,7 +276,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromClient(POINT* point)
         return E_POINTER;
 
     RECT viewRect;
-    if (!::GetClientRect(window, &viewRect))
+    if (!::GetClientRect(_window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
     *point = ConvertFrom(*point, GetContentRect(viewRect));
@@ -289,7 +289,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToClient(RECT* rect)
         return E_POINTER;
 
     RECT viewRect;
-    if (!::GetClientRect(window, &viewRect))
+    if (!::GetClientRect(_window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
     auto topLeft = ConvertTo({ rect->left, rect->top }, GetContentRect(viewRect));
@@ -304,7 +304,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromClient(RECT* rect)
         return E_POINTER;
 
     RECT viewRect;
-    if (!::GetClientRect(window, &viewRect))
+    if (!::GetClientRect(_window, &viewRect))
         return HRESULT_FROM_WIN32(::GetLastError());
 
     auto topLeft = ConvertFrom({ rect->left, rect->top }, GetContentRect(viewRect));
@@ -448,7 +448,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointToScreen(POINT* point)
     HRESULT hr;
     if (FAILED(hr = ConvertPointToClient(point)))
         return hr;
-    ClientToScreen(window, point);
+    ClientToScreen(_window, point);
     return S_OK;
 }
 
@@ -457,7 +457,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertPointFromScreen(POINT* point)
     if (point == nullptr)
         return E_POINTER;
 
-    ScreenToClient(window, point);
+    ScreenToClient(_window, point);
     return ConvertPointFromClient(point);
 }
 
@@ -466,8 +466,8 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectToScreen(RECT* rect)
     HRESULT hr;
     if (FAILED(hr = ConvertRectToClient(rect)))
         return E_POINTER;
-    ClientToScreen(window, reinterpret_cast<POINT*>(&rect->left));
-    ClientToScreen(window, reinterpret_cast<POINT*>(&rect->right));
+    ClientToScreen(_window, reinterpret_cast<POINT*>(&rect->left));
+    ClientToScreen(_window, reinterpret_cast<POINT*>(&rect->right));
     return S_OK;
 }
 
@@ -476,8 +476,8 @@ HRESULT STDMETHODCALLTYPE Wcdx::ConvertRectFromScreen(RECT* rect)
     if (rect == nullptr)
         return E_POINTER;
 
-    ScreenToClient(window, reinterpret_cast<POINT*>(&rect->left));
-    ScreenToClient(window, reinterpret_cast<POINT*>(&rect->right));
+    ScreenToClient(_window, reinterpret_cast<POINT*>(&rect->left));
+    ScreenToClient(_window, reinterpret_cast<POINT*>(&rect->right));
     return ConvertRectFromClient(rect);
 }
 
@@ -554,13 +554,13 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
         switch (message)
         {
         case WM_NCCREATE:
-            // The client window procedure is an ANSI window procedure, so we need to mangle it
+            // The client _window procedure is an ANSI window procedure, so we need to mangle it
             // appropriately.  We can do that by passing it through SetWindowLongPtr.
             wcdx = static_cast<Wcdx*>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams);
-            auto wndproc = ::SetWindowLongPtrA(hwnd, GWLP_WNDPROC, LONG_PTR(wcdx->clientWindowProc));
-            wcdx->clientWindowProc = WNDPROC(::SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wndproc));
+            auto wndproc = ::SetWindowLongPtrA(hwnd, GWLP_WNDPROC, LONG_PTR(wcdx->_clientWindowProc));
+            wcdx->_clientWindowProc = WNDPROC(::SetWindowLongPtrW(hwnd, GWLP_WNDPROC, wndproc));
             ::SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(wcdx));
-            return ::CallWindowProc(wcdx->clientWindowProc, hwnd, message, wParam, lParam);
+            return ::CallWindowProc(wcdx->_clientWindowProc, hwnd, message, wParam, lParam);
         }
     }
     else
@@ -568,7 +568,7 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
         switch (message)
         {
         case WM_SIZE:
-            wcdx->OnSize(wParam, LOWORD(lParam), HIWORD(lParam));
+            wcdx->OnSize(DWORD(wParam), LOWORD(lParam), HIWORD(lParam));
             return 0;
 
         case WM_ACTIVATE:
@@ -587,29 +587,29 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
             return 0;
 
         case WM_NCLBUTTONDBLCLK:
-            if (wcdx->OnNCLButtonDblClk(wParam, *reinterpret_cast<POINTS*>(&lParam)))
+            if (wcdx->OnNCLButtonDblClk(int(wParam), *reinterpret_cast<POINTS*>(&lParam)))
                 return 0;
             break;
 
         case WM_SYSKEYDOWN:
-            if (wcdx->OnSysKeyDown(wParam, LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam))))
+            if (wcdx->OnSysKeyDown(DWORD(wParam), LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam))))
                 return 0;
             break;
 
         case WM_SYSCOMMAND:
-            if (wcdx->OnSysCommand(wParam, LOWORD(lParam), HIWORD(lParam)))
+            if (wcdx->OnSysCommand(WORD(wParam), LOWORD(lParam), HIWORD(lParam)))
                 return 0;
             break;
 
         case WM_SIZING:
-            wcdx->OnSizing(wParam, reinterpret_cast<RECT*>(lParam));
+            wcdx->OnSizing(DWORD(wParam), reinterpret_cast<RECT*>(lParam));
             return TRUE;
 
         case WM_APP_RENDER:
             wcdx->OnRender();
             break;
         }
-        return ::CallWindowProc(wcdx->clientWindowProc, hwnd, message, wParam, lParam);
+        return ::CallWindowProc(wcdx->_clientWindowProc, hwnd, message, wParam, lParam);
     }
 
     return ::DefWindowProc(hwnd, message, wParam, lParam);
@@ -617,19 +617,25 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 
 void Wcdx::OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight)
 {
-    sizeChanged = true;
-    ::PostMessage(window, WM_APP_RENDER, 0, 0);
+    stdext::discard(resizeType, clientWidth, clientHeight);
+
+    _sizeChanged = true;
+    ::PostMessage(_window, WM_APP_RENDER, 0, 0);
 }
 
 void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
 {
+    stdext::discard(minimized, other);
+
     if (state != WA_INACTIVE)
         ConfineCursor();
 }
 
 void Wcdx::OnWindowPosChanged(WINDOWPOS* windowPos)
 {
-    if (d3d == nullptr)
+    stdext::discard(windowPos);
+
+    if (_d3d == nullptr)
         return;
 
     HRESULT hr;
@@ -638,30 +644,34 @@ void Wcdx::OnWindowPosChanged(WINDOWPOS* windowPos)
         return;
 
     D3DDEVICE_CREATION_PARAMETERS parameters;
-    if (FAILED(hr = device->GetCreationParameters(&parameters)) || parameters.AdapterOrdinal != adapter)
+    if (FAILED(hr = _device->GetCreationParameters(&parameters)) || parameters.AdapterOrdinal != adapter)
         RecreateDevice(adapter);
 }
 
 void Wcdx::OnNCDestroy()
 {
-    window.Invalidate();
+    _window.Invalidate();
 }
 
 bool Wcdx::OnNCLButtonDblClk(int hittest, POINTS position)
 {
+    stdext::discard(position);
+
     if (hittest != HTCAPTION)
         return false;
 
     // Windows should already be doing this, but doesn't appear to.
-    ::SendMessage(window, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+    ::SendMessage(_window, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
     return true;
 }
 
 bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 {
+    stdext::discard(repeatCount, scode);
+
     if ((vkey == VK_RETURN) && ((flags & 0x60) == 0x20))
     {
-        SetFullScreen(!fullScreen);
+        SetFullScreen(!_fullScreen);
         return true;
     }
 
@@ -670,6 +680,8 @@ bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
 
 bool Wcdx::OnSysCommand(WORD type, SHORT x, SHORT y)
 {
+    stdext::discard(x, y);
+
     if (type == SC_MAXIMIZE)
     {
         SetFullScreen(true);
@@ -682,7 +694,7 @@ bool Wcdx::OnSysCommand(WORD type, SHORT x, SHORT y)
 void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
 {
     RECT client = { 0, 0, 0, 0 };
-    ::AdjustWindowRectEx(&client, frameStyle, FALSE, frameExStyle);
+    ::AdjustWindowRectEx(&client, _frameStyle, FALSE, _frameExStyle);
     client.left = dragRect->left - client.left;
     client.top = dragRect->top - client.top;
     client.right = dragRect->right - client.right;
@@ -767,29 +779,29 @@ HRESULT Wcdx::UpdateMonitor(UINT& adapter)
     adapter = D3DADAPTER_DEFAULT;
 
     HRESULT hr;
-    monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
-    for (UINT n = 0, count = d3d->GetAdapterCount(); n < count; ++n)
+    _monitor = ::MonitorFromWindow(_window, MONITOR_DEFAULTTONULL);
+    for (UINT n = 0, count = _d3d->GetAdapterCount(); n < count; ++n)
     {
         D3DDISPLAYMODE currentMode;
-        if (FAILED(hr = d3d->GetAdapterDisplayMode(n, &currentMode)))
+        if (FAILED(hr = _d3d->GetAdapterDisplayMode(n, &currentMode)))
             return hr;
 
         // Require hardware acceleration.
-        hr = d3d->CheckDeviceType(n, D3DDEVTYPE_HAL, currentMode.Format, currentMode.Format, TRUE);
+        hr = _d3d->CheckDeviceType(n, D3DDEVTYPE_HAL, currentMode.Format, currentMode.Format, TRUE);
         if (hr == D3DERR_NOTAVAILABLE)
             continue;
         if (FAILED(hr))
             return hr;
 
         D3DCAPS9 caps;
-        hr = d3d->GetDeviceCaps(n, D3DDEVTYPE_HAL, &caps);
+        hr = _d3d->GetDeviceCaps(n, D3DDEVTYPE_HAL, &caps);
         if (hr == D3DERR_NOTAVAILABLE)
             continue;
         if (FAILED(hr))
             return hr;
 
         // Select the adapter that's already displaying the window.
-        if (d3d->GetAdapterMonitor(n) == monitor)
+        if (_d3d->GetAdapterMonitor(n) == _monitor)
         {
             adapter = n;
             break;
@@ -803,19 +815,19 @@ HRESULT Wcdx::RecreateDevice(UINT adapter)
 {
     HRESULT hr;
     D3DDISPLAYMODE currentMode;
-    if (FAILED(hr = d3d->GetAdapterDisplayMode(adapter, &currentMode)))
+    if (FAILED(hr = _d3d->GetAdapterDisplayMode(adapter, &currentMode)))
         return hr;
 
-    presentParams =
+    _presentParams =
     {
         currentMode.Width, currentMode.Height, currentMode.Format, 1,
         D3DMULTISAMPLE_NONE, 0,
-        D3DSWAPEFFECT_COPY, window, TRUE,
+        D3DSWAPEFFECT_COPY, _window, TRUE,
         FALSE, D3DFMT_UNKNOWN,
         0, 0, D3DPRESENT_INTERVAL_DEFAULT
     };
 
-    if (FAILED(hr = d3d->CreateDevice(adapter, D3DDEVTYPE_HAL, window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &presentParams, &device)))
+    if (FAILED(hr = _d3d->CreateDevice(adapter, D3DDEVTYPE_HAL, _window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &_presentParams, &_device)))
         return hr;
 
     if (FAILED(hr = CreateIntermediateSurface()))
@@ -827,8 +839,8 @@ HRESULT Wcdx::RecreateDevice(UINT adapter)
 HRESULT Wcdx::ResetDevice()
 {
     HRESULT hr;
-    surface = nullptr;
-    if (FAILED(hr = device->Reset(&presentParams)))
+    _surface = nullptr;
+    if (FAILED(hr = _device->Reset(&_presentParams)))
         return hr;
 
     if (FAILED(hr = CreateIntermediateSurface()))
@@ -839,49 +851,49 @@ HRESULT Wcdx::ResetDevice()
 
 HRESULT Wcdx::CreateIntermediateSurface()
 {
-    dirty = true;
-    return device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &surface, nullptr);
+    _dirty = true;
+    return _device->CreateOffscreenPlainSurface(ContentWidth, ContentHeight, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &_surface, nullptr);
 }
 
 void Wcdx::SetFullScreen(bool enabled)
 {
-    if (enabled == fullScreen)
+    if (enabled == _fullScreen)
         return;
 
     if (enabled)
     {
-        ::GetWindowRect(window, &frameRect);
+        ::GetWindowRect(_window, &_frameRect);
 
-        frameStyle = ::SetWindowLong(window, GWL_STYLE, WS_OVERLAPPED);
-        frameExStyle = ::SetWindowLong(window, GWL_EXSTYLE, 0);
+        _frameStyle = ::SetWindowLong(_window, GWL_STYLE, WS_OVERLAPPED);
+        _frameExStyle = ::SetWindowLong(_window, GWL_EXSTYLE, 0);
 
-        HMONITOR monitor = ::MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+        HMONITOR monitor = ::MonitorFromWindow(_window, MONITOR_DEFAULTTONEAREST);
         MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
         ::GetMonitorInfo(monitor, &monitorInfo);
 
-        ::SetWindowPos(window, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+        ::SetWindowPos(_window, HWND_TOP, monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
             monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
             monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
             SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-        fullScreen = true;
+        _fullScreen = true;
     }
     else
     {
         ::SetLastError(0);
-        DWORD style = ::SetWindowLong(window, GWL_STYLE, frameStyle);
-        DWORD exStyle = ::SetWindowLong(window, GWL_EXSTYLE, frameExStyle);
+        ::SetWindowLong(_window, GWL_STYLE, _frameStyle);
+        ::SetWindowLong(_window, GWL_EXSTYLE, _frameExStyle);
 
-        ::SetWindowPos(window, HWND_TOP, frameRect.left, frameRect.top,
-            frameRect.right - frameRect.left,
-            frameRect.bottom - frameRect.top,
+        ::SetWindowPos(_window, HWND_TOP, _frameRect.left, _frameRect.top,
+            _frameRect.right - _frameRect.left,
+            _frameRect.bottom - _frameRect.top,
             SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
-        fullScreen = false;
+        _fullScreen = false;
     }
 
     ConfineCursor();
-    ::PostMessage(window, WM_APP_RENDER, 0, 0);
+    ::PostMessage(_window, WM_APP_RENDER, 0, 0);
 }
 
 RECT Wcdx::GetContentRect(RECT clientRect)
@@ -904,22 +916,19 @@ RECT Wcdx::GetContentRect(RECT clientRect)
 
 void Wcdx::ConfineCursor()
 {
-    if (fullScreen)
+    if (_fullScreen)
     {
-        union
-        {
-            RECT rect;
-            struct
-            {
-                POINT topLeft;
-                POINT bottomRight;
-            };
-        } content;
-        ::GetClientRect(window, &content.rect);
-        content.rect = GetContentRect(content.rect);
-        ::ClientToScreen(window, &content.topLeft);
-        ::ClientToScreen(window, &content.bottomRight);
-        ::ClipCursor(&content.rect);
+        RECT contentRect;
+        ::GetClientRect(_window, &contentRect);
+        contentRect = GetContentRect(contentRect);
+
+        POINT topLeft = { contentRect.left, contentRect.top };
+        POINT bottomRight = { contentRect.right, contentRect.bottom };
+        ::ClientToScreen(_window, &topLeft);
+        ::ClientToScreen(_window, &bottomRight);
+
+        contentRect = { topLeft.x, topLeft.y, bottomRight.x, bottomRight.y };
+        ::ClipCursor(&contentRect);
     }
     else
         ::ClipCursor(nullptr);

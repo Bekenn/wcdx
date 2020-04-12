@@ -88,22 +88,22 @@ windows_error::windows_error() : system_error(::GetLastError(), windows_category
 
 std::string convert(const std::wstring& str)
 {
-    int length = ::WideCharToMultiByte(CP_ACP, 0, str.data(), str.size(), nullptr, 0, nullptr, nullptr);
+    int length = ::WideCharToMultiByte(CP_ACP, 0, str.data(), int(str.size()), nullptr, 0, nullptr, nullptr);
     if (length == 0)
         throw windows_error(GetLastError(), "Error converting exception context message from Unicode to ANSI");
 
     std::string converted(length, '\0');
-    length = ::WideCharToMultiByte(CP_ACP, 0, str.data(), str.size(), &converted.front(), length, nullptr, nullptr);
+    length = ::WideCharToMultiByte(CP_ACP, 0, str.data(), int(str.size()), &converted.front(), length, nullptr, nullptr);
     return converted;
 }
 
 std::wstring convert(const std::string& str)
 {
-    int length = ::MultiByteToWideChar(CP_ACP, 0, str.data(), str.size(), nullptr, 0);
+    int length = ::MultiByteToWideChar(CP_ACP, 0, str.data(), int(str.size()), nullptr, 0);
     if (length == 0)
         throw windows_error(GetLastError(), "Error converting exception context message from ANSI to Unicode");
 
     std::wstring converted(length, L'\0');
-    length = ::MultiByteToWideChar(CP_ACP, 0, str.data(), str.size(), &converted.front(), length);
+    length = ::MultiByteToWideChar(CP_ACP, 0, str.data(), int(str.size()), &converted.front(), length);
     return converted;
 }

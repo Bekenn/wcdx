@@ -77,7 +77,7 @@ public:
     void on_end_of_stream(end_of_stream_handler handler);
 
 private:
-    size_t do_read(uint8_t* buffer, size_t size) override;
+    size_t do_read(std::byte* buffer, size_t size) override;
     size_t do_skip(size_t size) override;
 
     uint32_t next_chunk_index(uint32_t chunk_index, uint8_t trigger, uint8_t intensity);

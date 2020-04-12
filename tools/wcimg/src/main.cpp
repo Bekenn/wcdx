@@ -445,7 +445,6 @@ namespace
     {
         auto& stream = input.as<stdext::input_stream>();
         auto& seeker = input.as<stdext::seekable>();
-        auto start_position = seeker.position();
         auto dimensions = get_image_dimensions(input);
 
         WICColor colors[256];
@@ -505,7 +504,7 @@ namespace
         UINT bitmap_stride;
         COM_REQUIRE_SUCCESS(lock->GetStride(&bitmap_stride));
 
-        std::fill_n(bitmap_data, buffer_size, 0xFF);
+        std::fill_n(bitmap_data, buffer_size, BYTE(0xFF));
         seeker.seek(stdext::seek_from::current, 8);
 
         uint16_t seg_flags;
@@ -532,14 +531,14 @@ namespace
                         std::fill_n(segment_data, run_width, color);
                     }
                     else
-                        stream.read(segment_data, run_width);
+                        stream.read_all(segment_data, run_width);
 
                     seg_width -= run_width;
                     segment_data += run_width;
                 }
             }
             else
-                stream.read(segment_data, seg_width);
+                stream.read_all(segment_data, seg_width);
         }
 
         lock.Release();
@@ -700,7 +699,7 @@ namespace
                     output.write(uint16_t(length << 1));
                     output.write(int16_t(x - reference_point.x));
                     output.write(int16_t(y - reference_point.y));
-                    output.write(p, length);
+                    output.write_all(p, length);
                     p = seg_last;
                 }
                 else
@@ -718,7 +717,7 @@ namespace
                     {
                         auto length = run_first - p;
                         output.write(uint8_t(length << 1));
-                        output.write(p, length);
+                        output.write_all(p, length);
                         p = run_first;
                     }
 

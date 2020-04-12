@@ -11,7 +11,7 @@ namespace
 {
     struct resource
     {
-        uint8_t* data;
+        const std::byte* data;
         size_t size;
     };
 }
@@ -58,7 +58,7 @@ resource_stream::impl::impl(uint32_t id) : id(id)
         HGLOBAL hdata = ::LoadResource(module, hres);
         if (hdata == nullptr)
             throw windows_error();
-        resource _res = { static_cast<uint8_t*>(::LockResource(hdata)), ::SizeofResource(module, hres) };
+        resource _res = { static_cast<const std::byte*>(::LockResource(hdata)), ::SizeofResource(module, hres) };
         if ((_res.size == 0) && ::GetLastError() != ERROR_SUCCESS)
             throw windows_error();
         if (_res.data == nullptr)

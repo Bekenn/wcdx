@@ -15,7 +15,7 @@ struct chunk_header
 };
 
 template <typename T, size_t length>
-constexpr size_t lengthof(const T (&a)[length])
+constexpr size_t lengthof(const T (&)[length])
 {
     return length;
 }

@@ -44,15 +44,15 @@ wcaudio_stream::wcaudio_stream(stdext::multi_ref<stdext::input_stream, stdext::s
 
     _chunks.resize(_file_header.chunk_count);
     seeker.seek(stdext::seek_from::begin, _file_header.chunk_headers_offset);
-    in.read(_chunks.data(), _chunks.size());
+    in.read_all(_chunks.data(), _chunks.size());
 
     _chunk_links.resize(_file_header.chunk_link_count);
     seeker.seek(stdext::seek_from::begin, _file_header.chunk_link_offset);
-    in.read(_chunk_links.data(), _chunk_links.size());
+    in.read_all(_chunk_links.data(), _chunk_links.size());
 
     _trigger_links.resize(_file_header.trigger_link_count);
     seeker.seek(stdext::seek_from::begin, _file_header.trigger_link_offset);
-    in.read(_trigger_links.data(), _trigger_links.size());
+    in.read_all(_trigger_links.data(), _trigger_links.size());
 }
 
 wcaudio_stream::~wcaudio_stream() = default;
@@ -92,7 +92,7 @@ void wcaudio_stream::select(uint8_t trigger, uint8_t intensity)
     _frame_count = 0;
 }
 
-size_t wcaudio_stream::do_read(uint8_t* buffer, size_t size)
+size_t wcaudio_stream::do_read(std::byte* buffer, size_t size)
 {
     if (_current_chunk == nullptr)
         return 0;
@@ -105,10 +105,10 @@ size_t wcaudio_stream::do_read(uint8_t* buffer, size_t size)
     {
         seeker.set_position(stdext::stream_position(_current_chunk->start_offset) + _current_chunk_offset);
         auto chunk_size = _current_chunk->end_offset - _current_chunk->start_offset;
-        auto bytes = std::min(chunk_size - _current_chunk_offset, size);
+        auto bytes = std::min(size_t(chunk_size - _current_chunk_offset), size);
 
         if (buffer == nullptr)
-            bytes = in.skip<uint8_t>(bytes);
+            bytes = in.skip<std::byte>(bytes);
         else
         {
             bytes = in.read(p, bytes);
@@ -117,13 +117,13 @@ size_t wcaudio_stream::do_read(uint8_t* buffer, size_t size)
 
         size -= bytes;
         total_bytes += bytes;
-        _current_chunk_offset += bytes;
+        _current_chunk_offset += uint32_t(bytes);
         if (_current_chunk_offset == chunk_size)
         {
             _frame_count += chunk_size / (_file_header.channels * ((_file_header.bits_per_sample + 7) / 8));
             _current_chunk_offset = 0;
 
-            auto index = next_chunk_index(_current_chunk - &_chunks.front(), no_trigger, _current_intensity);
+            auto index = next_chunk_index(uint32_t(_current_chunk - &_chunks.front()), no_trigger, _current_intensity);
             if (index == end_of_track)
             {
                 _current_chunk = nullptr;

@@ -233,6 +233,7 @@ int wmain(int argc, wchar_t* argv[])
         });
         stream.on_loop([&](uint32_t chunk_index, unsigned frame_count)
         {
+            stdext::discard(frame_count);
             if ((options.program_mode & mode_debug_info) != 0)
             {
                 std::cout << "Loop to chunk " << chunk_index
@@ -256,11 +257,13 @@ int wmain(int argc, wchar_t* argv[])
         });
         stream.on_prev_track([&](unsigned frame_count)
         {
+            stdext::discard(frame_count);
             if ((options.program_mode & mode_debug_info) != 0)
                 std::cout << "Return to previous track" << std::endl;
         });
         stream.on_end_of_stream([&](unsigned frame_count)
         {
+            stdext::discard(frame_count);
             if ((options.program_mode & mode_debug_info) != 0)
                 std::cout << "End of stream" << std::endl;
         });
@@ -328,47 +331,47 @@ namespace
     // See StreamLoadTrack and GetStreamTrack in Wing1.i64
     constexpr track_desc wc1_track_map[] =
     {
-        { stream_archive::wc1_mission, no_trigger },    // 0 - Combat 1
-        { stream_archive::wc1_mission, no_trigger },    // 1 - Combat 2
-        { stream_archive::wc1_mission, no_trigger },    // 2 - Combat 3
-        { stream_archive::wc1_mission, no_trigger },    // 3 - Combat 4
-        { stream_archive::wc1_mission, no_trigger },    // 4 - Combat 5
-        { stream_archive::wc1_mission, no_trigger },    // 5 - Combat 6
-        { stream_archive::wc1_mission, 6 },             // 6 - Victorious combat
-        { stream_archive::wc1_mission, 7 },             // 7 - Tragedy
-        { stream_archive::wc1_mission, 8 },             // 8 - Dire straits
-        { stream_archive::wc1_mission, 9 },             // 9 - Scratch one fighter
-        { stream_archive::wc1_mission, 10 },            // 10 - Defeated fleeing enemy
-        { stream_archive::wc1_mission, 11 },            // 11 - Wingman death
-        { stream_archive::wc1_mission, no_trigger },    // 12 - Returning defeated
-        { stream_archive::wc1_mission, no_trigger },    // 13 - Returning successful
-        { stream_archive::wc1_mission, no_trigger },    // 14 - Returning jubilant
-        { stream_archive::wc1_mission, no_trigger },    // 15 - Mission 1
-        { stream_archive::wc1_mission, no_trigger },    // 16 - Mission 2
-        { stream_archive::wc1_mission, no_trigger },    // 17 - Mission 3
-        { stream_archive::wc1_mission, no_trigger },    // 18 - Mission 4
+        { stream_archive::wc1_mission, no_trigger },    // 0 - Regular Combat
+        { stream_archive::wc1_mission, no_trigger },    // 1 - Being Tailed
+        { stream_archive::wc1_mission, no_trigger },    // 2 - Tailing An Enemy
+        { stream_archive::wc1_mission, no_trigger },    // 3 - Missile Tracking You
+        { stream_archive::wc1_mission, no_trigger },    // 4 - You're Severely Damaged - Floundering
+        { stream_archive::wc1_mission, no_trigger },    // 5 - Intense Combat
+        { stream_archive::wc1_mission, 6 },             // 6 - Target Hit
+        { stream_archive::wc1_mission, 7 },             // 7 - Ally Killed
+        { stream_archive::wc1_mission, 8 },             // 8 - Your Wingman's been hit
+        { stream_archive::wc1_mission, 9 },             // 9 - Enemy Ace Killed
+        { stream_archive::wc1_mission, 10 },            // 10 - Overall Victory
+        { stream_archive::wc1_mission, 11 },            // 11 - Overall Defeat
+        { stream_archive::wc1_mission, no_trigger },    // 12 - Returning Defeated
+        { stream_archive::wc1_mission, no_trigger },    // 13 - Returning Normal
+        { stream_archive::wc1_mission, no_trigger },    // 14 - Returning Triumphant
+        { stream_archive::wc1_mission, no_trigger },    // 15 - Flying to Dogfight
+        { stream_archive::wc1_mission, no_trigger },    // 16 - Goal Line - Defending the Claw
+        { stream_archive::wc1_mission, no_trigger },    // 17 - Strike Mission - Go Get 'Em
+        { stream_archive::wc1_mission, no_trigger },    // 18 - Grim or Escort Mission
         { stream_archive::wc1_preflight, no_trigger },  // 19 - OriginFX (actually, fanfare)
-        { stream_archive::wc1_preflight, 1 },           // 20 - Arcade Mission
+        { stream_archive::wc1_preflight, 1 },           // 20 - Arcade Theme
         { stream_archive::wc1_preflight, 4 },           // 21 - Arcade Victory
         { stream_archive::wc1_preflight, 3 },           // 22 - Arcade Death
         { stream_archive::wc1_preflight, no_trigger },  // 23 - Fanfare
-        { stream_archive::wc1_preflight, 5 },           // 24 - Halcyon's Office 1
-        { stream_archive::wc1_preflight, 6 },           // 25 - Briefing
-        { stream_archive::wc1_preflight, 7 },           // 26 - Briefing Dismissed
-        { stream_archive::wc1_mission, 27 },            // 27 - Scramble
+        { stream_archive::wc1_preflight, 5 },           // 24 - Briefing intro
+        { stream_archive::wc1_preflight, 6 },           // 25 - Briefing middle
+        { stream_archive::wc1_preflight, 7 },           // 26 - Briefing end
+        { stream_archive::wc1_mission, 27 },            // 27 - Scramble through launch
         { stream_archive::wc1_postflight, no_trigger }, // 28 - Landing
-        { stream_archive::wc1_postflight, 0, },         // 29 - Damage Assessment
+        { stream_archive::wc1_postflight, 0, },         // 29 - Medium Damage Assessment
         { stream_archive::wc1_preflight, 0 },           // 30 - Rec Room
-        { stream_archive::wc1_mission, 31 },            // 31 - Eject
-        { stream_archive::wc1_mission, 32 },            // 32 - Death
-        { stream_archive::wc1_postflight, 2 },          // 33 - debriefing (successful)
-        { stream_archive::wc1_postflight, 1 },          // 34 - debriefing (failed)
-        { stream_archive::wc1_preflight, 2 },           // 35 - barracks
-        { stream_archive::wc1_postflight, 3 },          // 36 - Halcyon's Office / Briefing 2
-        { stream_archive::wc1_postflight, 4 },          // 37 - medal (valor?)
-        { stream_archive::wc1_postflight, 5 },          // 38 - medal (golden sun?)
-        { stream_archive::wc1_postflight, 7 },          // 39 - another medal
-        { stream_archive::wc1_postflight, 6 },          // 40 - big medal
+        { stream_archive::wc1_mission, 31 },            // 31 - Eject - Imminent Rescue
+        { stream_archive::wc1_mission, 32 },            // 32 - Funeral
+        { stream_archive::wc1_postflight, 2 },          // 33 - Debriefing - Successful
+        { stream_archive::wc1_postflight, 1 },          // 34 - Debriefing - Unsuccessful
+        { stream_archive::wc1_preflight, 2 },           // 35 - Barracks - Go To Sleep You Pilots
+        { stream_archive::wc1_postflight, 3 },          // 36 - Commander's Office
+        { stream_archive::wc1_postflight, 4 },          // 37 - Medel Ceremony - General
+        { stream_archive::wc1_postflight, 5 },          // 38 - Medal Ceremony - Purple Heart
+        { stream_archive::wc1_postflight, 7 },          // 39 - Minor Bravery
+        { stream_archive::wc1_postflight, 6 },          // 40 - Major Bravery
     };
 
     constexpr track_desc wc2_track_map[] =

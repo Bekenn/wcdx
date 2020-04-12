@@ -68,13 +68,13 @@ try
     // Force an even buffer size so that chunk_size can be exactly half.  In practice,
     // this will never change the value.
     buffer_size &= ~uint32_t(1);
-    auto chunk_size = buffer_size / 2;
+    auto chunk_size = uint32_t(buffer_size / 2);
 
     desc =
     {
         sizeof(desc),
         DSBCAPS_GETCURRENTPOSITION2 | DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLPOSITIONNOTIFY,
-        buffer_size,
+        DWORD(buffer_size),
         0,
         reinterpret_cast<WAVEFORMATEX*>(&format),
         DS3DALG_DEFAULT
@@ -103,7 +103,7 @@ try
         { 0, position_event },
         { chunk_size, position_event },
     };
-    hr = notify->SetNotificationPositions(stdext::lengthof(positions), positions);
+    hr = notify->SetNotificationPositions(DWORD(stdext::lengthof(positions)), positions);
     if (FAILED(hr))
         throw std::system_error(hr, dsound_category());
 
@@ -149,7 +149,7 @@ namespace
 
     size_t fill_buffer(IDirectSoundBuffer8* dsbuffer8, uint32_t offset, stdext::input_stream& stream, uint32_t size)
     {
-        uint8_t* buffer;
+        std::byte* buffer;
         DWORD buffer_bytes;
         auto hr = dsbuffer8->Lock(offset, size, reinterpret_cast<LPVOID*>(&buffer), &buffer_bytes, nullptr, nullptr, 0);
         if (FAILED(hr))
@@ -157,7 +157,7 @@ namespace
         at_scope_exit([&] { dsbuffer8->Unlock(buffer, buffer_bytes, nullptr, 0); });
 
         auto bytes = stream.read(buffer, buffer_bytes);
-        std::fill_n(buffer + bytes, buffer_bytes - bytes, 0);
+        std::fill_n(buffer + bytes, buffer_bytes - bytes, std::byte());
         return bytes;
     }
 }

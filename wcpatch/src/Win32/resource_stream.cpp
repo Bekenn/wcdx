@@ -5,6 +5,9 @@
 #include "windows_error.h"
 
 #include <map>
+#include <optional>
+
+#include <cassert>
 
 
 namespace
@@ -14,24 +17,27 @@ namespace
         const std::byte* data;
         size_t size;
     };
+
+    std::optional<resource> load_resource(uint32_t id);
 }
 
 struct resource_stream::impl
 {
-    impl(uint32_t id);
-    impl(const impl&) = delete;
-    impl& operator = (const impl&) = delete;
-    ~impl();
+    resource res;
 
-    uint32_t id;
-    std::shared_ptr<resource> res;
-
-private:
-    static std::map<uint32_t, std::weak_ptr<resource>> loaded_resources;
+    impl() = default;
+    explicit impl(uint32_t id)
+    {
+        auto _res = load_resource(id);
+        if (_res == std::nullopt)
+            throw windows_error();
+        res = *_res;
+    }
 };
 
+resource_stream::resource_stream() noexcept = default;
 
-resource_stream::resource_stream(std::unique_ptr<impl> pimpl) : memory_input_stream(pimpl->res->data, pimpl->res->size)
+resource_stream::resource_stream(std::unique_ptr<impl> pimpl) : memory_input_stream(pimpl->res.data, pimpl->res.size)
     , pimpl(std::move(pimpl))
 {
 }
@@ -40,40 +46,57 @@ resource_stream::resource_stream(uint32_t id) : resource_stream(std::make_unique
 {
 }
 
+resource_stream::resource_stream(resource_stream&&) noexcept = default;
+resource_stream& resource_stream::operator = (resource_stream&& other) noexcept = default;
+
 resource_stream::~resource_stream() = default;
 
-std::map<uint32_t, std::weak_ptr<resource>> resource_stream::impl::loaded_resources;
-
-resource_stream::impl::impl(uint32_t id) : id(id)
+std::error_code resource_stream::open(uint32_t id)
 {
-    auto i = loaded_resources.find(id);
-    if (i == loaded_resources.end() || i->second.expired())
+    assert(!is_open());
+
+    auto res = load_resource(id);
+    if (res == std::nullopt)
+        return { int(::GetLastError()), std::system_category() };
+
+    pimpl = std::make_unique<impl>();
+    pimpl->res = *res;
+    reset(res->data, res->size);
+
+    return { };
+}
+
+bool resource_stream::is_open() const noexcept
+{
+    return pimpl != nullptr;
+}
+
+void resource_stream::close() noexcept
+{
+    pimpl = nullptr;
+    reset();
+}
+
+namespace
+{
+    std::optional<resource> load_resource(uint32_t id)
     {
         HMODULE module;
         if (!::GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, L"Nobody expects the Spanish Inquisition!", &module))
-            throw windows_error();
+            return std::nullopt;
         HRSRC hres = ::FindResource(module, MAKEINTRESOURCE(id), L"BINARY");
         if (hres == nullptr)
-            throw windows_error();
+            return std::nullopt;
         HGLOBAL hdata = ::LoadResource(module, hres);
         if (hdata == nullptr)
-            throw windows_error();
-        resource _res = { static_cast<const std::byte*>(::LockResource(hdata)), ::SizeofResource(module, hres) };
-        if ((_res.size == 0) && ::GetLastError() != ERROR_SUCCESS)
-            throw windows_error();
-        if (_res.data == nullptr)
-            throw windows_error();
-        res = std::make_shared<resource>(std::move(_res));
-        loaded_resources.insert(std::pair<uint32_t, std::weak_ptr<resource>>(id, res));
-    }
-    else
-        res = i->second.lock();
-}
+            return std::nullopt;
+        DWORD size = ::SizeofResource(module, hres);
+        if (size == 0 && ::GetLastError() != ERROR_SUCCESS)
+            return std::nullopt;
+        void* data = ::LockResource(hdata);
+        if (data == nullptr)
+            return std::nullopt;
 
-resource_stream::impl::~impl()
-{
-    res.reset();
-    auto i = loaded_resources.find(id);
-    if (i->second.expired())
-        loaded_resources.erase(i);
+        return resource{ static_cast<const std::byte*>(data), size };
+    }
 }

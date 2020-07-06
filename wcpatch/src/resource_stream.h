@@ -10,12 +10,17 @@
 class resource_stream : public stdext::memory_input_stream
 {
 public:
+    resource_stream() noexcept;
     explicit resource_stream(uint32_t id);
     resource_stream(const resource_stream&) = delete;
     resource_stream& operator = (const resource_stream&) = delete;
-    resource_stream(resource_stream&&) = default;
-    resource_stream& operator = (resource_stream&& other) = default;
+    resource_stream(resource_stream&&) noexcept;
+    resource_stream& operator = (resource_stream&& other) noexcept;
     ~resource_stream() override;
+
+    std::error_code open(uint32_t id);
+    bool is_open() const noexcept;
+    void close() noexcept;
 
 private:
     struct impl;

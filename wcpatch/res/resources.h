@@ -7,5 +7,6 @@
 #define RESOURCE_ID_SM1_DIFF        0x102
 #define RESOURCE_ID_SM2_DIFF        0x103
 #define RESOURCE_ID_WING2_DIFF      0x104
+#define RESOURCE_ID_SO1_DIFF        0x105
 
 #endif

@@ -5,6 +5,7 @@
 #include <stdext/file.h>
 #include <stdext/multi.h>
 #include <stdext/string_view.h>
+#include <stdext/unicode.h>
 
 #include <algorithm>
 #include <iostream>
@@ -58,10 +59,6 @@ static const uint16_t OptionalHeader_PE32PlusSignature = 0x20B;
 
 int wmain(int argc, wchar_t* argv[])
 {
-#ifdef _DEBUG
-    at_scope_exit([&]{ system("pause"); });
-#endif
-
     try
     {
         const wchar_t* input_path = nullptr;
@@ -337,17 +334,29 @@ bool apply_dif(stdext::multi_ref<stdext::stream, stdext::seekable> file_data, ui
         { 0xfce65eac, RESOURCE_ID_TRANSFER_DIFF },
         { 0xa6ddc22a, RESOURCE_ID_SM1_DIFF },
         { 0x74350efd, RESOURCE_ID_SM2_DIFF },
-        { 0x067a8af5, RESOURCE_ID_WING2_DIFF }
+        { 0x067a8af5, RESOURCE_ID_WING2_DIFF },
+        { 0x91f07afd, RESOURCE_ID_SO1_DIFF }
     };
 
-    auto i = diffs.find(hash);
-    if (i == diffs.end())
+    resource_stream resource;
+    {
+        auto i = diffs.find(hash);
+        if (i == diffs.end())
+            return false;
+
+        resource = resource_stream(i->second);
+    }
+
+    auto line = read_line(resource);
+    if (line == std::nullopt)
         return false;
 
-    resource_stream resource(i->second);
-    auto line = read_line(resource);
+    // Skip the UTF-8 byte order mark, if present
+    auto gen = stdext::make_generator(*line);
+    auto i = stdext::extract_utf32(gen) == stdext::UNICODE_BYTE_ORDER_MARK ? gen.base() : line->begin();
+
     char tag[] = "This difference file has been created by IDA";
-    if (line == std::nullopt || mismatch(line->begin(), line->end(), std::begin(tag), std::end(tag)).second != std::end(tag) - 1)
+    if (std::mismatch(i, line->end(), std::begin(tag), std::end(tag)).second != std::end(tag) - 1)
         return false;
 
     while ((line = read_line(resource)) != std::nullopt)

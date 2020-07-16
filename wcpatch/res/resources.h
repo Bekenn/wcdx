@@ -8,5 +8,6 @@
 #define RESOURCE_ID_SM2_DIFF        0x103
 #define RESOURCE_ID_WING2_DIFF      0x104
 #define RESOURCE_ID_SO1_DIFF        0x105
+#define RESOURCE_ID_SO2_DIFF        0x106
 
 #endif

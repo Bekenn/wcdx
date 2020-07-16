@@ -335,7 +335,8 @@ bool apply_dif(stdext::multi_ref<stdext::stream, stdext::seekable> file_data, ui
         { 0xa6ddc22a, RESOURCE_ID_SM1_DIFF },
         { 0x74350efd, RESOURCE_ID_SM2_DIFF },
         { 0x067a8af5, RESOURCE_ID_WING2_DIFF },
-        { 0x91f07afd, RESOURCE_ID_SO1_DIFF }
+        { 0x91f07afd, RESOURCE_ID_SO1_DIFF },
+        { 0x049f706e, RESOURCE_ID_SO2_DIFF }
     };
 
     resource_stream resource;

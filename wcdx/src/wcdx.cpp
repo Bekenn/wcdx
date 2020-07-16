@@ -633,9 +633,7 @@ void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
 
 void Wcdx::OnWindowPosChanged(WINDOWPOS* windowPos)
 {
-    stdext::discard(windowPos);
-
-    if (_d3d == nullptr)
+    if ((windowPos->flags & SWP_HIDEWINDOW) != 0 || _d3d == nullptr)
         return;
 
     HRESULT hr;

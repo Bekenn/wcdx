@@ -98,6 +98,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::QueryInterface(REFIID riid, void** ppvObject)
         return S_OK;
     }
 
+    *ppvObject = nullptr;
     return E_NOINTERFACE;
 }
 

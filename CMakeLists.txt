@@ -15,5 +15,6 @@ if(MSVC)
 endif()
 
 add_subdirectory(external)
+add_subdirectory(libs)
 add_subdirectory(dist)
 add_subdirectory(tests)

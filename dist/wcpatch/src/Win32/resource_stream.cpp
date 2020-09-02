@@ -84,7 +84,7 @@ namespace
         HMODULE module;
         if (!::GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, L"Nobody expects the Spanish Inquisition!", &module))
             return std::nullopt;
-        HRSRC hres = ::FindResource(module, MAKEINTRESOURCE(id), L"BINARY");
+        HRSRC hres = ::FindResource(module, MAKEINTRESOURCE(id), RT_RCDATA);
         if (hres == nullptr)
             return std::nullopt;
         HGLOBAL hdata = ::LoadResource(module, hres);

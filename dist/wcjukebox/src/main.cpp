@@ -524,7 +524,7 @@ namespace
 
     void show_tracks(program_options& options)
     {
-        stdext::const_array_view<track_desc> track_map;
+        stdext::array_view<const track_desc> track_map;
         if ((options.program_mode & mode_wc2) == 0)
             track_map = wc1_track_map;
         else
@@ -563,7 +563,7 @@ namespace
 
     void select_track(program_options& options)
     {
-        stdext::const_array_view<track_desc> track_map;
+        stdext::array_view<const track_desc> track_map;
         if ((options.program_mode & mode_wc2) == 0)
             track_map = wc1_track_map;
         else

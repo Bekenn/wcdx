@@ -5,6 +5,7 @@ add_subdirectory(wcpatch)
 add_subdirectory(patchmusic)
 
 set(CMAKE_FOLDER Tools)
+add_subdirectory(wc2font)
 add_subdirectory(wcimg)
 add_subdirectory(wcjukebox)
 add_subdirectory(wcres)

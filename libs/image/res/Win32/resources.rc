@@ -1,0 +1,4 @@
+#include "../../include/image/resources.h"
+
+RESOURCE_ID_WC1PAL      RCDATA  "..\\GAME.PAL"
+RESOURCE_ID_WC2PAL      RCDATA  "..\\wc2.pal"

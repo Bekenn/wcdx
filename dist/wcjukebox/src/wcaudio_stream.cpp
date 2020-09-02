@@ -60,7 +60,7 @@ wcaudio_stream::~wcaudio_stream() = default;
 std::vector<uint8_t> wcaudio_stream::triggers() const
 {
     auto& chunk = _chunks[0];
-    stdext::array_view trigger_links(&_trigger_links[chunk.trigger_link_index], chunk.trigger_link_count);
+    stdext::array_view<const stream_trigger_link> trigger_links(&_trigger_links[chunk.trigger_link_index], chunk.trigger_link_count);
     std::vector<uint8_t> triggers;
     triggers.reserve(trigger_links.size());
     for (auto& link : trigger_links)
@@ -71,7 +71,7 @@ std::vector<uint8_t> wcaudio_stream::triggers() const
 std::vector<uint8_t> wcaudio_stream::intensities() const
 {
     auto& index_chunk = _chunks[0];
-    stdext::array_view chunk_links(&_chunk_links[index_chunk.chunk_link_index], index_chunk.chunk_link_count);
+    stdext::array_view<const stream_chunk_link> chunk_links(&_chunk_links[index_chunk.chunk_link_index], index_chunk.chunk_link_count);
     std::vector<uint8_t> intensities;
     intensities.reserve(chunk_links.size());
     for (auto& link : chunk_links)

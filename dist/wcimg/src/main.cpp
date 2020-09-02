@@ -1,5 +1,7 @@
-#include "../res/resources.h"
+#include <image/image.h>
+#include <image/resources.h>
 
+#include <stdext/array_view.h>
 #include <stdext/file.h>
 #include <stdext/multi.h>
 #include <stdext/string.h>
@@ -7,9 +9,11 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <limits>
 #include <iostream>
+#include <limits>
+#include <memory>
 
+#include <cassert>
 #include <cstdlib>
 #include <cstdint>
 #include <cwchar>
@@ -18,6 +22,7 @@
 #include <Windows.h>
 #include <comip.h>
 #include <comdef.h>
+#include <shellapi.h>
 #include <wincodec.h>
 
 
@@ -446,65 +451,26 @@ namespace
         auto& stream = input.as<stdext::input_stream>();
         auto& seeker = input.as<stdext::seekable>();
         auto dimensions = get_image_dimensions(input);
+        if (dimensions.p1.x > dimensions.p2.x || dimensions.p1.y > dimensions.p2.y)
+            throw std::runtime_error("Invalid image data");
 
-        WICColor colors[256];
+        auto width = unsigned(dimensions.p2.x - dimensions.p1.x);
+        auto height = unsigned(dimensions.p2.y - dimensions.p1.y);
 
         WORD resid = game == game_id::wc1 ? RESOURCE_ID_WC1PAL : RESOURCE_ID_WC2PAL;
-        size_t offset = game == game_id::wc1 ? 0x30 : 0;
+        size_t palette_offset = game == game_id::wc1 ? 0x30 : 0;
 
-        auto res = ::FindResource(nullptr, MAKEINTRESOURCE(resid), L"BINARY");
+        auto res = ::FindResource(nullptr, MAKEINTRESOURCE(resid), RT_RCDATA);
         if (res == nullptr)
             throw std::system_error(::GetLastError(), std::system_category());
         auto resp = ::LoadResource(nullptr, res);
-        auto palette_data = ::LockResource(resp);
+        auto palette_data = static_cast<const std::byte*>(::LockResource(resp));
+        auto palette_size = ::SizeofResource(nullptr, res);
+        assert(palette_size > palette_offset);
 
-        auto palette_p = static_cast<const BYTE*>(palette_data) + offset;
-        auto color_p = colors;
-        for (size_t n = 0; n < stdext::lengthof(colors); ++n)
-        {
-            auto red = *palette_p++;
-            auto green = *palette_p++;
-            auto blue = *palette_p++;
-            *color_p++ = blue | (green << 8) | (red << 16) | (0xFF << 24);
-        }
-        colors[stdext::lengthof(colors) - 1] &= 0x00FFFFFF; // last entry transparent
-
-        HRESULT hr;
-        COM_REQUIRE_SUCCESS(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
-        at_scope_exit(::CoUninitialize);
-
-        IWICImagingFactoryPtr imaging_factory;
-        COM_REQUIRE_SUCCESS(imaging_factory.CreateInstance(CLSID_WICImagingFactory));
-
-        IWICPalettePtr palette;
-        COM_REQUIRE_SUCCESS(imaging_factory->CreatePalette(&palette));
-        COM_REQUIRE_SUCCESS(palette->InitializeCustom(colors, stdext::lengthof(colors)));
-
-        IWICBitmapPtr bitmap;
-        COM_REQUIRE_SUCCESS(imaging_factory->CreateBitmap(dimensions.p2.x - dimensions.p1.x,
-            dimensions.p2.y - dimensions.p1.y,
-            GUID_WICPixelFormat8bppIndexed,
-            WICBitmapCacheOnDemand,
-            &bitmap));
-        COM_REQUIRE_SUCCESS(bitmap->SetPalette(palette));
-
-        WICRect lock_rect =
-        {
-            0, 0,
-            dimensions.p2.x - dimensions.p1.x, dimensions.p2.y - dimensions.p1.y
-        };
-
-        IWICBitmapLockPtr lock;
-        COM_REQUIRE_SUCCESS(bitmap->Lock(&lock_rect, WICBitmapLockWrite, &lock));
-
-        UINT buffer_size;
-        WICInProcPointer bitmap_data;
-        COM_REQUIRE_SUCCESS(lock->GetDataPointer(&buffer_size, &bitmap_data));
-
-        UINT bitmap_stride;
-        COM_REQUIRE_SUCCESS(lock->GetStride(&bitmap_stride));
-
-        std::fill_n(bitmap_data, buffer_size, BYTE(0xFF));
+        size_t buffer_size = width * height;
+        auto bitmap_data = std::make_unique<std::byte[]>(buffer_size);
+        std::fill_n(bitmap_data.get(), buffer_size, std::byte(0xFF));
         seeker.seek(stdext::seek_from::current, 8);
 
         uint16_t seg_flags;
@@ -518,7 +484,7 @@ namespace
             x -= dimensions.p1.x;
             y -= dimensions.p1.y;
 
-            auto segment_data = bitmap_data + (y * bitmap_stride) + x;
+            auto segment_data = bitmap_data.get() + (y * width) + x;
             if ((seg_flags & 1) != 0)
             {
                 while (seg_width > 0)
@@ -527,7 +493,7 @@ namespace
                     auto run_width = run_flags >> 1;
                     if ((run_flags & 1) != 0)
                     {
-                        auto color = stream.read<uint8_t>();
+                        auto color = stream.read<std::byte>();
                         std::fill_n(segment_data, run_width, color);
                     }
                     else
@@ -541,22 +507,10 @@ namespace
                 stream.read_all(segment_data, seg_width);
         }
 
-        lock.Release();
-
-        IWICStreamPtr wicstream;
-        COM_REQUIRE_SUCCESS(imaging_factory->CreateStream(&wicstream));
-        COM_REQUIRE_SUCCESS(wicstream->InitializeFromFilename(output_path, GENERIC_WRITE));
-
-        IWICBitmapEncoderPtr encoder;
-        COM_REQUIRE_SUCCESS(imaging_factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder));
-        COM_REQUIRE_SUCCESS(encoder->Initialize(wicstream, WICBitmapEncoderNoCache));
-
-        IWICBitmapFrameEncodePtr frame_encode;
-        COM_REQUIRE_SUCCESS(encoder->CreateNewFrame(&frame_encode, nullptr));
-        COM_REQUIRE_SUCCESS(frame_encode->Initialize(nullptr));
-        COM_REQUIRE_SUCCESS(frame_encode->WriteSource(bitmap, nullptr));
-        COM_REQUIRE_SUCCESS(frame_encode->Commit());
-        COM_REQUIRE_SUCCESS(encoder->Commit());
+        stdext::array_view<const std::byte> palette_view(palette_data + palette_offset, palette_size - palette_offset);
+        stdext::memory_input_stream pixels(bitmap_data.get(), buffer_size);
+        stdext::file_output_stream out(output_path);
+        wcdx::image::write_image({ width, height }, palette_view, pixels, out);
     }
 
     void pack_images(const std::vector<const wchar_t*>& input_paths, game_id game, const std::vector<point>& reference_points, const wchar_t* output_path)
@@ -564,7 +518,7 @@ namespace
         WORD resid = game == game_id::wc1 ? RESOURCE_ID_WC1PAL : RESOURCE_ID_WC2PAL;
         size_t offset = game == game_id::wc1 ? 0x30 : 0;
 
-        auto res = ::FindResource(nullptr, MAKEINTRESOURCE(resid), L"BINARY");
+        auto res = ::FindResource(nullptr, MAKEINTRESOURCE(resid), RT_RCDATA);
         if (res == nullptr)
             throw std::system_error(::GetLastError(), std::system_category());
         auto resp = ::LoadResource(nullptr, res);

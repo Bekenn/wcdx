@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 add_executable(wcjukebox)
 target_link_libraries(wcjukebox PRIVATE stdext dsound)
@@ -16,4 +16,4 @@ endif()
 set_source_files_properties(${SOURCES_DISABLED} PROPERTIES LANGUAGE "")
 
 target_sources(wcjukebox PRIVATE ${SOURCES})
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "Source Files" FILES ${SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES})

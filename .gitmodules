@@ -1,4 +1,4 @@
 [submodule "stdext"]
-	path = stdext
+	path = external/stdext
 	url = git@github.com:Bekenn/stdext.git
 	branch = master

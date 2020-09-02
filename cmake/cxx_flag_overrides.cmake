@@ -1,6 +1,0 @@
-if(MSVC)
-    foreach(config ${CMAKE_CONFIGURATION_TYPES})
-        string(TOUPPER ${config} CONFIG)
-        string(REPLACE /MD /MT CMAKE_CXX_FLAGS_${CONFIG}_INIT ${CMAKE_CXX_FLAGS_${CONFIG}_INIT})
-    endforeach()
-endif()

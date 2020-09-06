@@ -555,7 +555,7 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
         switch (message)
         {
         case WM_NCCREATE:
-            // The client _window procedure is an ANSI window procedure, so we need to mangle it
+            // The client window procedure is an ANSI window procedure, so we need to mangle it
             // appropriately.  We can do that by passing it through SetWindowLongPtr.
             wcdx = static_cast<Wcdx*>(reinterpret_cast<LPCREATESTRUCT>(lParam)->lpCreateParams);
             auto wndproc = ::SetWindowLongPtrA(hwnd, GWLP_WNDPROC, LONG_PTR(wcdx->_clientWindowProc));
@@ -592,8 +592,8 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
                 return 0;
             break;
 
-        case WM_SYSKEYDOWN:
-            if (wcdx->OnSysKeyDown(DWORD(wParam), LOWORD(lParam), LOBYTE(HIWORD(lParam)), HIBYTE(HIWORD(lParam))))
+        case WM_SYSCHAR:
+            if (wcdx->OnSysChar(DWORD(wParam), LOWORD(lParam), HIWORD(lParam)))
                 return 0;
             break;
 
@@ -664,11 +664,9 @@ bool Wcdx::OnNCLButtonDblClk(int hittest, POINTS position)
     return true;
 }
 
-bool Wcdx::OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags)
+bool Wcdx::OnSysChar(DWORD vkey, WORD repeatCount, WORD flags)
 {
-    stdext::discard(repeatCount, scode);
-
-    if ((vkey == VK_RETURN) && ((flags & 0x60) == 0x20))
+    if (vkey == VK_RETURN && ((flags & (KF_REPEAT | KF_ALTDOWN)) == KF_ALTDOWN))
     {
         SetFullScreen(!_fullScreen);
         return true;

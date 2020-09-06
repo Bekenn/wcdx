@@ -68,7 +68,7 @@ private:
     void OnWindowPosChanged(WINDOWPOS* windowPos);
     void OnNCDestroy();
     bool OnNCLButtonDblClk(int hittest, POINTS position);
-    bool OnSysKeyDown(DWORD vkey, WORD repeatCount, BYTE scode, BYTE flags);
+    bool OnSysChar(DWORD vkey, WORD repeatCount, WORD flags);
     bool OnSysCommand(WORD type, SHORT x, SHORT y);
     void OnSizing(DWORD windowEdge, RECT* dragRect);
     void OnRender();

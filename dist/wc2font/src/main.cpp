@@ -302,6 +302,7 @@ namespace
         }
 
         assert(seeker.position() == seeker.end_position());
+        stdext::discard(seeker);
 
         return glyphs;
     }

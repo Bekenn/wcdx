@@ -1,0 +1,39 @@
+#include <WinVer.h>
+
+#pragma code_page(65001)
+
+#ifdef _DEBUG
+#define FF_DEBUG VS_FF_DEBUG
+#else
+#define FF_DEBUG 0
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     ${VERSION_MAJOR},${VERSION_MINOR},${VERSION_PATCH},${VERSION_TWEAK}
+PRODUCTVERSION  ${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${PROJECT_VERSION_TWEAK}
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       FF_DEBUG
+FILEOS          VOS_NT
+FILETYPE        VFT_DLL
+FILESUBTYPE     0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "Comments", "${COMMENTS}"
+            VALUE "CompanyName", "James Touton"
+            VALUE "FileDescription", "${DESCRIPTION}"
+            VALUE "FileVersion", "${VERSION}"
+            VALUE "InternalName", "${NAME}"
+            VALUE "LegalCopyright", "© 2014-${COPYRIGHT_YEAR} James Touton"
+            VALUE "OriginalFilename", "${FILENAME}"
+            VALUE "ProductName", "${PROJECT_NAME}"
+            VALUE "ProductVersion", "${PROJECT_VERSION}${GIT_HASH_ADDENDUM}"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

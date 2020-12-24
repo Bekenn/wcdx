@@ -17,6 +17,9 @@ endif()
 if(NOT CMAKE_VS_PLATFORM_TOOLSET MATCHES [[_xp(,.*)?$]])
     message(FATAL_ERROR "Please select a platform toolset supporting Windows XP (e.g. -T v141_xp)")
 endif()
+if(NOT CMAKE_VS_PLATFORM_NAME STREQUAL "Win32")
+    message(FATAL_ERROR "wcdx must be built for 32-bit x86 (-A Win32)")
+endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

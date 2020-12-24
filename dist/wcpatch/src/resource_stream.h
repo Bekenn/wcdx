@@ -5,6 +5,7 @@
 #include <stdext/stream.h>
 
 #include <memory>
+#include <system_error>
 #include <cstdint>
 
 class resource_stream : public stdext::memory_input_stream

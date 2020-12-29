@@ -81,71 +81,15 @@ namespace
         using runtime_error::runtime_error;
     };
 
-    template <class WrappedGenerator>
-    class whitespace_generator : public stdext::basic_generator<whitespace_generator<WrappedGenerator>, char>
-    {
-    public:
-        using wrapped_generator = WrappedGenerator;
-    public:
-        whitespace_generator() = default;
-
-        whitespace_generator(wrapped_generator& wrapped)
-            : wrapped(&wrapped)
-        {
-            next();
-        }
-
-    public:
-        friend bool operator == (const whitespace_generator& lhs, const whitespace_generator& rhs)
-        {
-            return lhs.wrapped == rhs.wrapped
-                && lhs.value == rhs.value;
-        }
-
-        friend bool operator != (const whitespace_generator& lhs, const whitespace_generator& rhs)
-        {
-            return !(lhs == rhs);
-        }
-
-    public:
-        const char& get() const { return value; }
-        bool valid() const { return wrapped != nullptr; }
-
-        void next()
-        {
-            if (!*wrapped)
-            {
-                wrapped = nullptr;
-                value = '\0';
-                return;
-            }
-
-            value = **wrapped;
-            ++*wrapped;
-            if (value == '\r')
-            {
-                value = ' ';
-                if (*wrapped && **wrapped == '\n')
-                    ++*wrapped;
-            }
-            else if (value == '\n')
-                value = ' ';
-        }
-
-    private:
-        wrapped_generator* wrapped = nullptr;
-        stdext::optional<char> value;
-    };
-
     void parse_args(int argc, const wchar_t* const argv[], program_options& options);
     void show_usage(const wchar_t* invocation);
 
     void extract_images(stdext::multi_ref<stdext::input_stream, stdext::seekable> input, game_id game, const wchar_t* output_path, const wchar_t* prefix);
     void extract_image(stdext::multi_ref<stdext::input_stream, stdext::seekable> input, game_id game, int index, const wchar_t* output_path);
-    void extract_image(stdext::multi_ref<stdext::input_stream, stdext::seekable> input, game_id game, const wchar_t* output_path);
+    void extract_image(stdext::input_stream& input, game_id game, const wchar_t* output_path);
     void pack_images(const std::vector<const wchar_t*>& input_paths, game_id game, const std::vector<point>& reference_points, const wchar_t* output_path);
     void pack_image(const IWICImagingFactoryPtr& imaging_factory, const IWICPalettePtr& palette, const IWICBitmapFrameDecodePtr& input, point reference_point, stdext::output_stream& output);
-    rect get_image_dimensions(stdext::multi_ref<stdext::input_stream, stdext::seekable> input);
+    rect read_image_dimensions(stdext::input_stream& input);
 }
 
 int wmain(int argc, wchar_t* argv[])
@@ -418,7 +362,7 @@ namespace
                 throw std::runtime_error("Bad image offset");
 
             seeker.set_position(begin_pos + image_offset);
-            extract_image(input, game, (std::filesystem::path(output_path) /= prefix + std::to_wstring(n) + L".png").c_str());
+            extract_image(stream, game, (std::filesystem::path(output_path) /= prefix + std::to_wstring(n) + L".png").c_str());
         }
     }
 
@@ -443,14 +387,12 @@ namespace
         auto image_offset = stream.read<uint32_t>();
 
         seeker.set_position(image_offset);
-        extract_image(input, game, output_path);
+        extract_image(stream, game, output_path);
     }
 
-    void extract_image(stdext::multi_ref<stdext::input_stream, stdext::seekable> input, game_id game, const wchar_t* output_path)
+    void extract_image(stdext::input_stream& input, game_id game, const wchar_t* output_path)
     {
-        auto& stream = input.as<stdext::input_stream>();
-        auto& seeker = input.as<stdext::seekable>();
-        auto dimensions = get_image_dimensions(input);
+        auto dimensions = read_image_dimensions(input);
         if (dimensions.p1.x > dimensions.p2.x || dimensions.p1.y > dimensions.p2.y)
             throw std::runtime_error("Invalid image data");
 
@@ -471,15 +413,14 @@ namespace
         size_t buffer_size = width * height;
         auto bitmap_data = std::make_unique<std::byte[]>(buffer_size);
         std::fill_n(bitmap_data.get(), buffer_size, std::byte(0xFF));
-        seeker.seek(stdext::seek_from::current, 8);
 
         uint16_t seg_flags;
-        while ((seg_flags = stream.read<uint16_t>()) != 0)
+        while ((seg_flags = input.read<uint16_t>()) != 0)
         {
             auto seg_width = seg_flags >> 1;
 
-            auto x = stream.read<int16_t>();
-            auto y = stream.read<int16_t>();
+            auto x = input.read<int16_t>();
+            auto y = input.read<int16_t>();
 
             x -= dimensions.p1.x;
             y -= dimensions.p1.y;
@@ -489,22 +430,22 @@ namespace
             {
                 while (seg_width > 0)
                 {
-                    auto run_flags = stream.read<uint8_t>();
+                    auto run_flags = input.read<uint8_t>();
                     auto run_width = run_flags >> 1;
                     if ((run_flags & 1) != 0)
                     {
-                        auto color = stream.read<std::byte>();
+                        auto color = input.read<std::byte>();
                         std::fill_n(segment_data, run_width, color);
                     }
                     else
-                        stream.read_all(segment_data, run_width);
+                        input.read_all(segment_data, run_width);
 
                     seg_width -= run_width;
                     segment_data += run_width;
                 }
             }
             else
-                stream.read_all(segment_data, seg_width);
+                input.read_all(segment_data, seg_width);
         }
 
         stdext::array_view<const std::byte> palette_view(palette_data + palette_offset, palette_size - palette_offset);
@@ -688,16 +629,12 @@ namespace
         output.write(uint16_t(0));
     }
 
-    rect get_image_dimensions(stdext::multi_ref<stdext::input_stream, stdext::seekable> input)
+    rect read_image_dimensions(stdext::input_stream& input)
     {
-        auto& stream = input.as<stdext::input_stream>();
-        auto& seeker = input.as<stdext::seekable>();
-        auto start_position = seeker.position();
-
-        auto right_extent = stream.read<int16_t>();
-        auto left_extent = stream.read<int16_t>();
-        auto top_extent = stream.read<int16_t>();
-        auto bottom_extent = stream.read<int16_t>();
+        auto right_extent = input.read<int16_t>();
+        auto left_extent = input.read<int16_t>();
+        auto top_extent = input.read<int16_t>();
+        auto bottom_extent = input.read<int16_t>();
 
         rect dim =
         {
@@ -705,7 +642,6 @@ namespace
             { right_extent + 1, bottom_extent + 1 }
         };
 
-        seeker.set_position(start_position);
         return dim;
     }
 }

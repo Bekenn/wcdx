@@ -6,7 +6,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_VS_GLOBALS XPDeprecationWarning=false)
 
 project(wcdx
-    VERSION 2.2.0.0
+    VERSION 2.2.1.0
     DESCRIPTION "Wing Commander patches for modern Windows operating systems"
     HOMEPAGE_URL https://github.com/Bekenn/wcdx/
 )

@@ -1,7 +1,8 @@
 #include "wave.h"
 #include "dsound_error.h"
 
-#include <stdext/unicode.h>
+#include <stdext/scope_guard.h>
+#include <stdext/string.h>
 #include <stdext/utility.h>
 
 #define NOMINMAX

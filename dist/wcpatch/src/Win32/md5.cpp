@@ -2,6 +2,8 @@
 #include "md5.h"
 #include "windows_error.h"
 
+#include <stdext/scope_guard.h>
+
 #include <string>
 
 #include <WinCrypt.h>

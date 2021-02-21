@@ -1,12 +1,16 @@
 #include <stdext/file.h>
 #include <stdext/string.h>
+#include <stdext/utility.h>
 
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <stack>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>
@@ -38,11 +42,30 @@ namespace
         using runtime_error::runtime_error;
     };
 
+    class bit_input_stream
+    {
+    public:
+        explicit bit_input_stream(stdext::input_stream& stream) noexcept;
+        bit_input_stream(const bit_input_stream&) = delete;
+        bit_input_stream& operator = (const bit_input_stream&) = delete;
+
+    public:
+        template <class Int, STDEXT_REQUIRES(std::is_integral_v<Int>)>
+        Int read(size_t bit_width);
+
+    private:
+        stdext::input_stream* _stream;
+        size_t _src_bit_position = CHAR_BIT;
+        std::byte _src_byte;
+    };
+
     void show_usage(const wchar_t* invocation);
     void diagnose_options(const program_options& options);
 
     void extract_all(stdext::file_input_stream& input_file, const wchar_t* output_path);
     void extract_one(stdext::file_input_stream& input_file, unsigned index, const wchar_t* output_path);
+    void extract_uncompressed(stdext::input_stream& input_file, stdext::output_stream& output_file);
+    void extract_compressed(stdext::input_stream& input_file, stdext::output_stream& output_file);
 }
 
 int wmain(int argc, wchar_t* argv[])
@@ -166,6 +189,34 @@ int wmain(int argc, wchar_t* argv[])
 
 namespace
 {
+    bit_input_stream::bit_input_stream(stdext::input_stream& stream) noexcept
+        : _stream(&stream)
+    {
+    }
+
+    template <class Int, STDEXT_REQUIRED(std::is_integral_v<Int>)>
+    Int bit_input_stream::read(size_t bit_width)
+    {
+        Int result = {};
+        size_t dst_bit_position = 0;
+        while (bit_width != 0)
+        {
+            if (_src_bit_position == CHAR_BIT)
+            {
+                _src_byte = _stream->read<std::byte>();
+                _src_bit_position = 0;
+            }
+            size_t bits_used = stdext::min(bit_width, size_t(CHAR_BIT - _src_bit_position));
+            auto byte = (_src_byte >> _src_bit_position) & std::byte((1 << bits_used) - 1);
+            _src_bit_position += bits_used;
+            bit_width -= bits_used;
+            result |= Int(byte) << dst_bit_position;
+            dst_bit_position += bits_used;
+        }
+
+        return result;
+    }
+
     void show_usage(const wchar_t* invocation)
     {
         std::wcout <<
@@ -225,20 +276,104 @@ namespace
             throw std::range_error("Resource index " + std::to_string(index) + " out of range");
 
         input_file.set_position(descriptor_offset);
-        auto resource_offset = input_file.read<uint32_t>() & 0x00FFFFFF;
+        auto resource_offset = input_file.read<uint32_t>();
+        auto resource_type = resource_offset >> 24;
+        resource_offset &= 0x00FFFFFF;
         auto resource_size = input_file.position() == first_resource_offset
             ? file_size - resource_offset
             : (input_file.read<uint32_t>() & 0x00FFFFFF) - resource_offset;
 
         input_file.set_position(resource_offset);
-
-        std::byte buf[0x1000];
+        stdext::substream resource_stream(input_file, resource_size);
         stdext::file_output_stream output_file(output_path);
-        while (resource_size != 0)
+
+        if (resource_type == 1)
         {
-            auto bytes = input_file.read(buf, std::min(size_t(resource_size), stdext::lengthof(buf)));
-            output_file.write_all(buf, bytes);
-            resource_size -= uint32_t(bytes);
+            resource_size = resource_stream.read<uint32_t>();
+            extract_compressed(resource_stream, output_file);
         }
+        else
+            extract_uncompressed(resource_stream, output_file);
+
+        if (output_file.position() != resource_size)
+            throw std::runtime_error("Resource size mismatch");
+    }
+
+    void extract_uncompressed(stdext::input_stream& input_file, stdext::output_stream& output_file)
+    {
+        std::byte buf[0x1000];
+        size_t bytes;
+        while ((bytes = input_file.read(buf)) != 0)
+            output_file.write_all(buf, bytes);
+    }
+
+    void extract_compressed(stdext::input_stream& input_file, stdext::output_stream& output_file)
+    {
+        static constexpr size_t min_code_width = 9;
+        static constexpr size_t max_code_width = 12;
+        static constexpr size_t initial_table_size = 0x102;
+        static constexpr uint16_t reset_code = 0x100;
+        static constexpr uint16_t stop_code = 0x101;
+
+        struct entry
+        {
+            uint16_t prev_index;
+            std::byte value;
+        } table[1 << max_code_width];
+        std::stack<std::byte> stack;
+
+        bit_input_stream bit_reader(input_file);
+        auto code = bit_reader.read<uint16_t>(min_code_width);
+        if (code == stop_code)
+            return;
+        if (code != reset_code)
+            throw std::runtime_error("Compressed data stream missing reset code");
+
+        do
+        {
+            size_t code_width = min_code_width;
+            size_t code_width_threshold = 1 << code_width;
+            size_t table_size = initial_table_size;
+            uint16_t prev_code = code;
+            while ((code = bit_reader.read<uint16_t>(code_width)) != reset_code && code != stop_code)
+            {
+                size_t index = code;
+                if (index > table_size)
+                    throw std::range_error("Decompressor table index out of range");
+
+                if (index == table_size)
+                {
+                    if (prev_code == reset_code)
+                        throw std::range_error("Decompressor table index out of range");
+                    index = prev_code;
+                }
+
+                while (index > 0xFF)
+                {
+                    stack.push(table[index].value);
+                    index = table[index].prev_index;
+                }
+
+                auto first_value = std::byte(index);
+                output_file.write(first_value);
+                for (; !stack.empty(); stack.pop())
+                    output_file.write(stack.top());
+
+                if (prev_code != reset_code)
+                {
+                    table[table_size].prev_index = prev_code;
+                    table[table_size].value = first_value;
+                    if (code == table_size)
+                        output_file.write(first_value);
+                    if (++table_size == code_width_threshold && code_width != max_code_width)
+                    {
+                        ++code_width;
+                        code_width_threshold <<= 1;
+                    }
+                }
+
+                prev_code = code;
+            }
+        } while (code != stop_code);
     }
 }

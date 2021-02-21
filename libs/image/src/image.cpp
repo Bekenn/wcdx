@@ -2,6 +2,7 @@
 
 #include <stdext/array_view.h>
 #include <stdext/multi.h>
+#include <stdext/scope_guard.h>
 #include <stdext/stream.h>
 #include <stdext/utility.h>
 

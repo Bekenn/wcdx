@@ -1,5 +1,6 @@
 #include "wcdx.h"
 
+#include <stdext/scope_guard.h>
 #include <stdext/utility.h>
 
 #include <algorithm>

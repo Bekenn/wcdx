@@ -3,6 +3,7 @@
 
 #include <stdext/array_view.h>
 #include <stdext/file.h>
+#include <stdext/scope_guard.h>
 #include <stdext/string.h>
 #include <stdext/utility.h>
 

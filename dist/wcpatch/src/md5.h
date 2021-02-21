@@ -2,8 +2,6 @@
 #define MD5_INCLUDED
 #pragma once
 
-#include <stdext/file.h>
-
 #include <initializer_list>
 #include <cstdint>
 

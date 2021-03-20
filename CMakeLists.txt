@@ -26,7 +26,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
-    add_compile_options(/MP /WX /W4 /wd4100)   # C4100: unreferenced formal parameter
+    add_compile_options(/MP /arch:IA32 /WX /W4 /wd4100)   # C4100: unreferenced formal parameter
 endif()
 if(WIN32)
     add_compile_definitions(_WIN32_WINNT=_WIN32_WINNT_WINXP)

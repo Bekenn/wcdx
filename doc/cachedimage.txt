@@ -1,0 +1,48 @@
+#include <cstddef>
+#include <cstdint>
+
+struct CachedImageInfo
+{
+    std::uint32_t offset;
+    std::byte _[4];
+};
+
+struct CachedImage
+{
+    // ImageHeader
+    std::uint16_t height;
+    std::uint16_t width;
+    std::int16_t refY;
+    std::int16_t refX;
+    std::int32_t offsetX;
+    std::int32_t offsetY;
+    std::int32_t right;
+    std::int32_t bottom;
+    std::byte data[];
+};
+
+struct ImageCache
+{
+    char version[4];    // "1.00"
+    std::uint32_t count;
+    CachedImageInfo imageInfo[8 * count];
+    CachedImage images[count];
+};
+
+
+// Image data format:
+// row:
+//  runs 0
+// runs
+//  color-or-trans
+//  runs color-or-trans
+// color-or-trans:
+//  trans
+//  color
+//  colors
+// trans:
+//  { 1, n } (n pixels of transparency)
+// color:
+//  { 2n, x } (n pixels of color x)
+// colors:
+//  { 2n + 1, ... } (n pixels of color data)

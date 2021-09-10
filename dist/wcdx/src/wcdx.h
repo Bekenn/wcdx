@@ -63,6 +63,8 @@ public:
     HRESULT STDMETHODCALLTYPE QueryValue(const wchar_t* keyname, const wchar_t* valuename, void* data, DWORD* size) override;
     HRESULT STDMETHODCALLTYPE SetValue(const wchar_t* keyname, const wchar_t* valuename, DWORD type, const void* data, DWORD size) override;
 
+    HRESULT STDMETHODCALLTYPE FillSnow(byte color_index, INT x, INT y, UINT width, UINT height, UINT pitch, byte* pixels) override;
+
 private:
     static ATOM FrameWindowClass();
     static LRESULT CALLBACK FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);

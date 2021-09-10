@@ -53,4 +53,6 @@ interface IWcdx : IUnknown
 
     HRESULT QueryValue([in, string] const wchar_t* keyname, [in, string] const wchar_t* valuename, [out, size_is(*size)] void* data, [in, out, ref] DWORD* size);
     HRESULT SetValue([in, string] const wchar_t* keyname, [in, string] const wchar_t* valuename, DWORD type, [in, size_is(size)] const void* data, DWORD size);
+
+    HRESULT FillSnow(byte color_index, INT x, INT y, UINT width, UINT height, UINT pitch, [out, size_is(height * pitch)] byte* pixels);
 }

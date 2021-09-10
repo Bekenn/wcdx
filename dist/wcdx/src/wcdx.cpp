@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <random>
 #include <system_error>
 
 #include <io.h>
@@ -38,6 +39,8 @@ namespace
     HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
 
     bool CreateDirectoryRecursive(LPWSTR pathName);
+
+    std::independent_bits_engine<std::mt19937, 1, unsigned int> RandomBit(std::random_device{}());
 }
 
 WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL _fullScreen)
@@ -554,6 +557,19 @@ HRESULT STDMETHODCALLTYPE Wcdx::SetValue(const wchar_t* keyname, const wchar_t* 
 
     error = ::RegSetValueEx(key, valuename, 0, type, static_cast<const BYTE*>(data), size);
     return HRESULT_FROM_WIN32(error);
+}
+
+HRESULT STDMETHODCALLTYPE Wcdx::FillSnow(byte color_index, INT x, INT y, UINT width, UINT height, UINT pitch, byte* pixels)
+{
+    for (UINT h = 0; h != height; ++h)
+    {
+        auto p = pixels + (y * pitch) + x;
+        for (UINT w = 0; w != width; ++w)
+            *p++ = byte(RandomBit() * color_index);
+        ++y;
+    }
+
+    return S_OK;
 }
 
 ATOM Wcdx::FrameWindowClass()

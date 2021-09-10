@@ -1,6 +1,13 @@
 #include "wcdx.h"
 
+#include <image/image.h>
+#include <image/resources.h>
+
+#include <stdext/array_view.h>
 #include <stdext/scope_guard.h>
+#include <stdext/file.h>
+#include <stdext/format.h>
+#include <stdext/multi.h>
 #include <stdext/utility.h>
 
 #include <algorithm>
@@ -18,17 +25,20 @@
 #include <strsafe.h>
 
 
-enum
+namespace
 {
-    WM_APP_RENDER = WM_APP
-};
+    enum
+    {
+        WM_APP_RENDER = WM_APP
+    };
 
-static POINT ConvertTo(POINT point, RECT rect);
-static POINT ConvertFrom(POINT point, RECT rect);
-static HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path);
-static HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
+    POINT ConvertTo(POINT point, RECT rect);
+    POINT ConvertFrom(POINT point, RECT rect);
+    HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path);
+    HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path);
 
-static bool CreateDirectoryRecursive(LPWSTR pathName);
+    bool CreateDirectoryRecursive(LPWSTR pathName);
+}
 
 WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL _fullScreen)
 {
@@ -45,6 +55,9 @@ WCDXAPI IWcdx* WcdxCreate(LPCWSTR windowTitle, WNDPROC windowProc, BOOL _fullScr
 Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool _fullScreen)
     : _refCount(1), _monitor(nullptr), _clientWindowProc(windowProc), _frameStyle(WS_OVERLAPPEDWINDOW), _frameExStyle(WS_EX_OVERLAPPEDWINDOW)
     , _fullScreen(false), _dirty(false), _sizeChanged(false)
+#if DEBUG_SCREENSHOTS
+    , _screenshotFrameCounter(0), _screenshotIndex(0), _screenshotFileIndex(0)
+#endif
 {
     // Create the window.
     auto hwnd = ::CreateWindowEx(_frameExStyle,
@@ -77,6 +90,15 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool _fullScreen)
     std::fill_n(_palette, stdext::lengthof(_palette), defColor);
 
     SetFullScreen(IsDebuggerPresent() ? false : _fullScreen);
+
+#if DEBUG_SCREENSHOTS
+    auto res = ::FindResource(DllInstance, MAKEINTRESOURCE(RESOURCE_ID_WC1PAL), RT_RCDATA);
+    if (res == nullptr)
+        throw std::system_error(::GetLastError(), std::system_category());
+    auto resp = ::LoadResource(DllInstance, res);
+    _screenshotPalette = static_cast<const std::byte*>(::LockResource(resp)) + 0x30;
+    _screenshotPaletteSize = 0x300;
+#endif
 }
 
 Wcdx::~Wcdx() = default;
@@ -153,7 +175,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::UpdateFrame(INT x, INT y, UINT width, UINT heigh
         std::min(rect.bottom, LONG(ContentHeight))
     };
 
-    auto src = static_cast<const BYTE*>(bits);
+    auto src = reinterpret_cast<const std::byte*>(bits);
     auto dest = _framebuffer + clipped.left + (ContentWidth * clipped.top);
     width = clipped.right - clipped.left;
     for (height = clipped.bottom - clipped.top; height-- > 0; )
@@ -186,10 +208,6 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
     {
         at_scope_exit([&]{ _device->EndScene(); });
 
-        IDirect3DSurface9Ptr backBuffer;
-        if (FAILED(hr = _device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
-            return hr;
-
         if (_dirty)
         {
             D3DLOCKED_RECT locked;
@@ -199,13 +217,13 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
             {
                 at_scope_exit([&]{ _surface->UnlockRect(); });
 
-                const BYTE* src = _framebuffer;
+                const std::byte* src = _framebuffer;
                 auto dest = static_cast<WcdxColor*>(locked.pBits);
                 for (int row = 0; row < ContentHeight; ++row)
                 {
-                    std::transform(src, src + ContentWidth, dest, [&](BYTE index)
+                    std::transform(src, src + ContentWidth, dest, [&](std::byte index)
                     {
-                        return _palette[index];
+                        return _palette[uint8_t(index)];
                     });
 
                     src += ContentWidth;
@@ -213,6 +231,26 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
                 }
             }
         }
+
+#if DEBUG_SCREENSHOTS
+        std::copy_n(_framebuffer, stdext::lengthof(_framebuffer), _screenshotBuffers[_screenshotIndex]);
+        if (++_screenshotIndex == stdext::lengthof(_screenshotBuffers))
+            _screenshotIndex = 0;
+
+        if (_screenshotFrameCounter != 0 && --_screenshotFrameCounter == 0)
+        {
+            for (size_t n = 0; n != stdext::lengthof(_screenshotBuffers); ++n)
+            {
+                auto index = (_screenshotIndex + n) % stdext::lengthof(_screenshotBuffers);
+                auto& buffer = _screenshotBuffers[index];
+                stdext::array_view<const std::byte> paletteView(_screenshotPalette, _screenshotPaletteSize);
+                stdext::memory_input_stream bufferStream(buffer, sizeof(buffer));
+                stdext::file_output_stream file(stdext::format_string("screenshot${0:03}.png", _screenshotFileIndex).c_str(), stdext::utf8_path_encoding());
+                wcdx::image::write_image({ ContentWidth, ContentHeight }, paletteView, bufferStream, file);
+                ++_screenshotFileIndex;
+            }
+        }
+#endif
 
         RECT activeRect = GetContentRect(clientRect);
         if (_sizeChanged)
@@ -241,6 +279,9 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 
         if (_dirty || _sizeChanged)
         {
+            IDirect3DSurface9Ptr backBuffer;
+            if (FAILED(hr = _device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer)))
+                return hr;
             if (FAILED(hr = _device->StretchRect(_surface, nullptr, backBuffer, &activeRect, D3DTEXF_POINT)))
                 return hr;
             _dirty = false;
@@ -932,84 +973,87 @@ void Wcdx::ConfineCursor()
         ::ClipCursor(nullptr);
 }
 
-POINT ConvertTo(POINT point, RECT rect)
+namespace
 {
-    return
+    POINT ConvertTo(POINT point, RECT rect)
     {
-        rect.left + ((point.x * (rect.right - rect.left)) / Wcdx::ContentWidth),
-        rect.top + ((point.y * (rect.bottom - rect.top)) / Wcdx::ContentHeight)
-    };
-}
-
-POINT ConvertFrom(POINT point, RECT rect)
-{
-    return
-    {
-        ((point.x - rect.left) * Wcdx::ContentWidth) / (rect.right - rect.left),
-        ((point.y - rect.top) * Wcdx::ContentHeight) / (rect.bottom - rect.top)
-    };
-}
-
-HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)
-{
-    typedef HRESULT(STDAPICALLTYPE* GetKnownFolderPathFn)(REFKNOWNFOLDERID rfid, DWORD dwFlags, HANDLE hToken, PWSTR* ppszPath);
-
-    auto shellModule = ::GetModuleHandle(L"Shell32.dll");
-    if (shellModule != nullptr)
-    {
-        auto GetKnownFolderPath = reinterpret_cast<GetKnownFolderPathFn>(::GetProcAddress(shellModule, "SHGetKnownFolderPath"));
-        if (GetKnownFolderPath != nullptr)
+        return
         {
-            // flags for Known Folder APIs
-            enum { KF_FLAG_CREATE = 0x00008000, KF_FLAG_INIT = 0x00000800 };
-
-            PWSTR folderPath;
-            auto hr = GetKnownFolderPath(FOLDERID_SavedGames, KF_FLAG_CREATE | KF_FLAG_INIT, nullptr, &folderPath);
-            if (FAILED(hr))
-                return hr == E_INVALIDARG ? STG_E_PATHNOTFOUND : hr;
-
-            at_scope_exit([&]{ ::CoTaskMemFree(folderPath); });
-
-            PWSTR pathEnd;
-            size_t remaining;
-            if (FAILED(hr = ::StringCchCopyEx(path, MAX_PATH, folderPath, &pathEnd, &remaining, 0)))
-                return hr;
-            if (FAILED(hr = ::StringCchCopyEx(pathEnd, remaining, L"\\", &pathEnd, &remaining, 0)))
-                return hr;
-            return ::StringCchCopy(pathEnd, remaining, subdir);
-        }
+            rect.left + ((point.x * (rect.right - rect.left)) / Wcdx::ContentWidth),
+            rect.top + ((point.y * (rect.bottom - rect.top)) / Wcdx::ContentHeight)
+        };
     }
 
-    return E_NOTIMPL;
-}
+    POINT ConvertFrom(POINT point, RECT rect)
+    {
+        return
+        {
+            ((point.x - rect.left) * Wcdx::ContentWidth) / (rect.right - rect.left),
+            ((point.y - rect.top) * Wcdx::ContentHeight) / (rect.bottom - rect.top)
+        };
+    }
 
-HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path)
-{
-    auto hr = ::SHGetFolderPath(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, path);
-    if (FAILED(hr))
-        return hr;
+    HRESULT GetSavedGamePath(LPCWSTR subdir, LPWSTR path)
+    {
+        typedef HRESULT(STDAPICALLTYPE* GetKnownFolderPathFn)(REFKNOWNFOLDERID rfid, DWORD dwFlags, HANDLE hToken, PWSTR* ppszPath);
 
-    PWSTR pathEnd;
-    size_t remaining;
-    if (FAILED(hr = ::StringCchCatEx(path, MAX_PATH, L"\\", &pathEnd, &remaining, 0)))
-        return hr;
-    return ::StringCchCopy(pathEnd, remaining, subdir);
-}
+        auto shellModule = ::GetModuleHandle(L"Shell32.dll");
+        if (shellModule != nullptr)
+        {
+            auto GetKnownFolderPath = reinterpret_cast<GetKnownFolderPathFn>(::GetProcAddress(shellModule, "SHGetKnownFolderPath"));
+            if (GetKnownFolderPath != nullptr)
+            {
+                // flags for Known Folder APIs
+                enum { KF_FLAG_CREATE = 0x00008000, KF_FLAG_INIT = 0x00000800 };
 
-bool CreateDirectoryRecursive(LPWSTR pathName)
-{
-    if (::CreateDirectory(pathName, nullptr) || ::GetLastError() == ERROR_ALREADY_EXISTS)
-        return true;
+                PWSTR folderPath;
+                auto hr = GetKnownFolderPath(FOLDERID_SavedGames, KF_FLAG_CREATE | KF_FLAG_INIT, nullptr, &folderPath);
+                if (FAILED(hr))
+                    return hr == E_INVALIDARG ? STG_E_PATHNOTFOUND : hr;
 
-    if (::GetLastError() != ERROR_PATH_NOT_FOUND)
-        return false;
+                at_scope_exit([&]{ ::CoTaskMemFree(folderPath); });
 
-    auto i = std::find(std::make_reverse_iterator(pathName + wcslen(pathName)), std::make_reverse_iterator(pathName), L'\\');
-    if (i.base() == pathName)
-        return false;
+                PWSTR pathEnd;
+                size_t remaining;
+                if (FAILED(hr = ::StringCchCopyEx(path, MAX_PATH, folderPath, &pathEnd, &remaining, 0)))
+                    return hr;
+                if (FAILED(hr = ::StringCchCopyEx(pathEnd, remaining, L"\\", &pathEnd, &remaining, 0)))
+                    return hr;
+                return ::StringCchCopy(pathEnd, remaining, subdir);
+            }
+        }
 
-    *i = L'\0';
-    auto result = CreateDirectoryRecursive(pathName);
-    *i = L'\\';
-    return result && ::CreateDirectory(pathName, nullptr);
+        return E_NOTIMPL;
+    }
+
+    HRESULT GetLocalAppDataPath(LPCWSTR subdir, LPWSTR path)
+    {
+        auto hr = ::SHGetFolderPath(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, path);
+        if (FAILED(hr))
+            return hr;
+
+        PWSTR pathEnd;
+        size_t remaining;
+        if (FAILED(hr = ::StringCchCatEx(path, MAX_PATH, L"\\", &pathEnd, &remaining, 0)))
+            return hr;
+        return ::StringCchCopy(pathEnd, remaining, subdir);
+    }
+
+    bool CreateDirectoryRecursive(LPWSTR pathName)
+    {
+        if (::CreateDirectory(pathName, nullptr) || ::GetLastError() == ERROR_ALREADY_EXISTS)
+            return true;
+
+        if (::GetLastError() != ERROR_PATH_NOT_FOUND)
+            return false;
+
+        auto i = std::find(std::make_reverse_iterator(pathName + wcslen(pathName)), std::make_reverse_iterator(pathName), L'\\');
+        if (i.base() == pathName)
+            return false;
+
+        *i = L'\0';
+        auto result = CreateDirectoryRecursive(pathName);
+        *i = L'\\';
+        return result && ::CreateDirectory(pathName, nullptr);
+    }
 }

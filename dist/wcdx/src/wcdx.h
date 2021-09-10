@@ -8,9 +8,13 @@
 
 #include <iwcdx.h>
 
+#include <cstddef>
+
 #include <comdef.h>
 #include <d3d9.h>
 
+
+#define DEBUG_SCREENSHOTS 0
 
 class Wcdx : public IWcdx
 {
@@ -49,7 +53,7 @@ public:
     HRESULT STDMETHODCALLTYPE WriteFile(int filedesc, long offset, unsigned int size, const void* data) override;
     HRESULT STDMETHODCALLTYPE ReadFile(int filedesc, long offset, unsigned int size, void* data) override;
     HRESULT STDMETHODCALLTYPE SeekFile(int filedesc, long offset, int method, long* position) override;
-    HRESULT STDMETHODCALLTYPE FileLength(int filedesc, long *length) override;
+    HRESULT STDMETHODCALLTYPE FileLength(int filedesc, long* length) override;
 
     HRESULT STDMETHODCALLTYPE ConvertPointToScreen(POINT* point) override;
     HRESULT STDMETHODCALLTYPE ConvertPointFromScreen(POINT* point) override;
@@ -97,11 +101,20 @@ private:
     D3DPRESENT_PARAMETERS _presentParams;
 
     WcdxColor _palette[256];
-    BYTE _framebuffer[ContentWidth * ContentHeight];
+    std::byte _framebuffer[ContentWidth * ContentHeight];
 
     bool _fullScreen;
     bool _dirty;
     bool _sizeChanged;
+
+#if DEBUG_SCREENSHOTS
+    int _screenshotFrameCounter;
+    std::byte _screenshotBuffers[10][ContentWidth * ContentHeight];
+    size_t _screenshotIndex;
+    const std::byte* _screenshotPalette;
+    size_t _screenshotPaletteSize;
+    size_t _screenshotFileIndex;
+#endif
 };
 
 #endif

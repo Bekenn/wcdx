@@ -28,6 +28,8 @@ Here are the main features:
     * wcimg for converting extracted resources to PNG images
     * wc2font for converting the resources in fonts.fnt to PNG images
 * Do you love George Oldziey's prerendered digital arrangements of the original MIDI scores?  With wcjukebox, now you can sit back, relax, and let the WAVs wash over you!
+* Fixed cockpit damage and VDU static.
+    * Fly without a radar in WC2!
 
 Caveats:
 

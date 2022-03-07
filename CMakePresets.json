@@ -1,0 +1,68 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "_vsbase",
+            "hidden": true,
+            "architecture": "Win32",
+            "toolset": "v141_xp",
+            "binaryDir": "build"
+        },
+        {
+            "name": "vs2017",
+            "inherits": "_vsbase",
+            "displayName": "Visual Studio 2017",
+            "generator": "Visual Studio 15"
+        },
+        {
+            "name": "vs2019",
+            "inherits": "_vsbase",
+            "displayName": "Visual Studio 2019",
+            "generator": "Visual Studio 16"
+        },
+        {
+            "name": "vs2022",
+            "inherits": "_vsbase",
+            "displayName": "Visual Studio 2022",
+            "generator": "Visual Studio 17"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "vs2017 Debug",
+            "displayName": "Debug",
+            "configurePreset": "vs2017",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2017 Release",
+            "displayName": "Release",
+            "configurePreset": "vs2017",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2019 Debug",
+            "displayName": "Debug",
+            "configurePreset": "vs2019",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2019 Release",
+            "displayName": "Release",
+            "configurePreset": "vs2019",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2022 Debug",
+            "displayName": "Debug",
+            "configurePreset": "vs2022",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2022 Release",
+            "displayName": "Release",
+            "configurePreset": "vs2022",
+            "configuration": "Release"
+        }
+    ]
+}

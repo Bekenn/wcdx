@@ -12,13 +12,17 @@ Here are the main features:
     * Oh, yeah, I also added windowed mode.  At any point in the game, hit Alt-Enter to toggle between full-screen and windowed modes.  The game will pick a pretty good default windowed size, but you can resize it to your heart's delight.
 * Removed all privileged instructions/API calls.
     * The game can now be run without using compatibility mode and without requiring administrative privileges.
-    * The game can now be run without using administrative privileges.
+    * _The game can now be run without using administrative privileges._
     * Really.  Please stop elevating the game's privilege level.  UAC exists for a reason; don't disable it.
 * Compatible with Windows XP and up.
     * Actually, I haven't tested it on Windows XP; let me know how it works.
 * Fixed that annoying music bug.
     * You know the one.  You take out that fleeing salthi, and then you get that victory fanfare, and then you get that victory fanfare, and then you get that victory fanfare, and then your roommate goes crazy and tosses your computer out the nearest window.  (Old times...)
     * Actually, this is technically a separate patch because it was a data issue, but in any case it's fixed.
+* Fixed planets.
+    * In the Kilrathi Saga, the vast emptiness of space was vastly empty. No longer!  Now Windows gamers can enjoy the same stellar backdrops as everyone else!
+* Fixed the poster.
+    * Check out that poster!
 * Secret Missions 1 and 2 support!
 * Now with support for Wing Commander 2!
     * And Special Operations 1!
@@ -39,17 +43,18 @@ Caveats:
 
 How to use it:
 
-1.  Install the game.  You can use the installer from the CD if you wish, but my preferred method is to simply take the WC1 or WC2 folder and copy it somewhere.  If you use the installer, be sure to go back and copy the streams directory afterward.  This will allow you to run the game without the CD, and (more importantly) is required in order for the music patch to work.
-2.  Install the Secret Missions and Special Operations [add-on packs][1].  Once again, you can use the included installer, or you can simply copy the files over.  If you choose to do it manually, note that every file that isn't an executable (.exe) belongs in the gamedat directory.
+1.  Install the game.  You can use the installer from the CD if you wish, but my preferred method is to simply take the WC1 or WC2 folder and copy it somewhere.  If you use the installer, be sure to go back and copy the `streams` directory afterward.  This will allow you to run the game without the CD, and (more importantly) is required in order for the music patch to work.
+2.  Install the Secret Missions and Special Operations [add-on packs][1].  Once again, you can use the included installer, or you can simply copy the files over.  If you choose to do it manually, note that every file that isn't an executable (`.exe`) belongs in the `gamedat` directory.
 3.  For Wing Commander 1:
-    1.  Copy wcdx.dll, wcpatch.exe, and patchmusic.exe into the directory containing Wing1.exe.
-    2.  Open a command prompt and run this command: wcpatch Wing1.exe Wing1_wcdx.exe
-    3.  Run this other command: patchmusic streams\mission.str
-    4.  Try it out!  Double-click on Wing1_wcdx to start the game.  If everything works the way you expect it to, you can delete your old Wing1.exe and rename Wing1_wcdx back to Wing1.
-    5.  To play the Secret Missions add-on packs, Repeat step 2 for SM1.EXE, SM2.EXE, and TRANSFER.EXE.
+    1.  Copy `wcdx.dll`, `wcpatch.exe`, and `patchmusic.exe` into the directory containing `Wing1.exe`.
+    2.  Open a command prompt and run this command: `wcpatch Wing1.exe Wing1_wcdx.exe`
+    3.  Run this other command: `patchmusic streams\mission.str`
+    4.  Try it out!  Double-click on `Wing1_wcdx` to start the game.  If everything works the way you expect it to, you can delete your old `Wing1.exe` and rename `Wing1_wcdx` back to `Wing1`.
+    5.  To play the Secret Missions add-on packs, repeat step 2 for `SM1.EXE`, `SM2.EXE`, and `TRANSFER.EXE`.
 4.  For Wing Commander 2:
-    1.  Do the same thing you did for Wing Commander 1.  You'll need to patch Wing2.exe, SO1.exe, and SO2.exe.
-    2.  There's no need to run patchmusic for Wing Commander 2.
+    1.  If you're installing Special Operations manually, **be sure to rename the original `wc2.exe` to `Wing2.exe`**. (The `wc2.exe` that is in the Special Operations zip file is a launcher, not the game itself.)
+    2.  Do the same thing you did for Wing Commander 1.  You'll need to patch `Wing2.exe`, `SO1.exe`, and `SO2.exe`.
+    3.  There's no need to run `patchmusic` for Wing Commander 2.
 
 Acknowledgements
 ----------------

@@ -20,6 +20,7 @@
 #include <cwchar>
 
 #define NOMINMAX
+struct IUnknown;
 #include <Windows.h>
 #include <comip.h>
 #include <comdef.h>
@@ -469,14 +470,14 @@ namespace
 
         auto palette_p = static_cast<const BYTE*>(palette_data) + offset;
         auto color_p = colors;
-        for (size_t n = 0; n < stdext::lengthof(colors); ++n)
+        for (size_t n = 0; n < std::size(colors); ++n)
         {
             auto red = *palette_p++;
             auto green = *palette_p++;
             auto blue = *palette_p++;
             *color_p++ = blue | (green << 8) | (red << 16) | (0xFF << 24);
         }
-        colors[stdext::lengthof(colors) - 1] &= 0x00FFFFFF; // last entry transparent
+        colors[std::size(colors) - 1] &= 0x00FFFFFF; // last entry transparent
 
         HRESULT hr;
         COM_REQUIRE_SUCCESS(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
@@ -487,7 +488,7 @@ namespace
 
         IWICPalettePtr palette;
         COM_REQUIRE_SUCCESS(imaging_factory->CreatePalette(&palette));
-        COM_REQUIRE_SUCCESS(palette->InitializeCustom(colors, stdext::lengthof(colors)));
+        COM_REQUIRE_SUCCESS(palette->InitializeCustom(colors, std::size(colors)));
 
         // Figure out how many images we're writing
         UINT image_count = 0;

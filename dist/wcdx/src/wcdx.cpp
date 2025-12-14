@@ -90,7 +90,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool _fullScreen)
         _com_raise_error(hr);
 
     WcdxColor defColor = { 0, 0, 0, 0xFF };
-    std::fill_n(_palette, stdext::lengthof(_palette), defColor);
+    std::fill_n(_palette, std::size(_palette), defColor);
 
     SetFullScreen(IsDebuggerPresent() ? false : _fullScreen);
 
@@ -236,15 +236,15 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
         }
 
 #if DEBUG_SCREENSHOTS
-        std::copy_n(_framebuffer, stdext::lengthof(_framebuffer), _screenshotBuffers[_screenshotIndex]);
-        if (++_screenshotIndex == stdext::lengthof(_screenshotBuffers))
+        std::copy_n(_framebuffer, std::size(_framebuffer), _screenshotBuffers[_screenshotIndex]);
+        if (++_screenshotIndex == std::size(_screenshotBuffers))
             _screenshotIndex = 0;
 
         if (_screenshotFrameCounter != 0 && --_screenshotFrameCounter == 0)
         {
-            for (size_t n = 0; n != stdext::lengthof(_screenshotBuffers); ++n)
+            for (size_t n = 0; n != std::size(_screenshotBuffers); ++n)
             {
-                auto index = (_screenshotIndex + n) % stdext::lengthof(_screenshotBuffers);
+                auto index = (_screenshotIndex + n) % std::size(_screenshotBuffers);
                 auto& buffer = _screenshotBuffers[index];
                 stdext::array_view<const std::byte> paletteView(_screenshotPalette, _screenshotPaletteSize);
                 stdext::memory_input_stream bufferStream(buffer, sizeof(buffer));

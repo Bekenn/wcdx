@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.30 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded$<$<CONFIG:Debug>:Debug>)
@@ -23,7 +23,7 @@ endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD_LATEST}) # Some C++17 features are disabled without this
 set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     add_compile_options(/MP /arch:IA32 /WX /W4 /wd4100)   # C4100: unreferenced formal parameter

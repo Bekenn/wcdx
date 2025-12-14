@@ -6,6 +6,7 @@
 #include <stdext/utility.h>
 
 #define NOMINMAX
+struct IUnknown;
 #include <Windows.h>
 #include <InitGuid.h>
 #include <dsound.h>
@@ -104,7 +105,7 @@ try
         { 0, position_event },
         { chunk_size, position_event },
     };
-    hr = notify->SetNotificationPositions(DWORD(stdext::lengthof(positions)), positions);
+    hr = notify->SetNotificationPositions(DWORD(std::size(positions)), positions);
     if (FAILED(hr))
         throw std::system_error(hr, dsound_category());
 

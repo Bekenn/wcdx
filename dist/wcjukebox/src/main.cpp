@@ -518,9 +518,9 @@ namespace
 
     void diagnose_unrecognized(const wchar_t* str)
     {
-        std::ostringstream message;
-        message << "Unexpected option: " << str;
-        throw usage_error(std::move(message).str());
+        std::wostringstream message;
+        message << L"Unexpected option: " << str;
+        throw usage_error(stdext::to_mbstring(std::move(message).str().c_str()));
     }
 
     void show_tracks(program_options& options)

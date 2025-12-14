@@ -20,7 +20,8 @@
 using std::min;
 using std::max;
 #pragma warning(push)
-#pragma warning(disable: 4458)  // declaration of 'nativeCap' hides class member
+#pragma warning(disable: 4458)  // declaration of 'identifier' hides class member
+#pragma warning(disable: 4596)  // 'name': illegal qualified name in member declaration
 #include <gdiplus.h>
 #pragma warning(pop)
 

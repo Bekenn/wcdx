@@ -167,7 +167,7 @@ bool patch_image(stdext::multi_ref<stdext::stream, stdext::seekable> file_data)
     // Read PE signature
     seekable.seek(stdext::seek_from::begin, offset);
     char signature[4];
-    if (stream.read(signature) != stdext::lengthof(signature) || !std::equal(std::begin(signature), std::end(signature), std::begin(PESignature)))
+    if (stream.read(signature) != std::size(signature) || !std::equal(std::begin(signature), std::end(signature), std::begin(PESignature)))
     {
         std::wcerr << L"Error: Input file is not a valid executable.\n";
         return false;

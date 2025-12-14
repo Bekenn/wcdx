@@ -10,6 +10,7 @@
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
+struct IUnknown;
 #include <comdef.h>
 #include <wincodec.h>
 
@@ -75,14 +76,14 @@ namespace wcdx::image
 
         auto palette_p = palette_data.data();
         auto color_p = colors;
-        for (size_t n = 0; n < stdext::lengthof(colors); ++n)
+        for (size_t n = 0; n < std::size(colors); ++n)
         {
             auto red = *palette_p++;
             auto green = *palette_p++;
             auto blue = *palette_p++;
             *color_p++ = uint8_t(blue) | (uint8_t(green) << 8) | (uint8_t(red) << 16) | (0xFF << 24);
         }
-        colors[stdext::lengthof(colors) - 1] &= 0x00FFFFFF; // last entry transparent
+        colors[std::size(colors) - 1] &= 0x00FFFFFF; // last entry transparent
 
         HRESULT hr;
         COM_REQUIRE_SUCCESS(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
@@ -93,7 +94,7 @@ namespace wcdx::image
 
         IWICPalettePtr palette;
         COM_REQUIRE_SUCCESS(imaging_factory->CreatePalette(&palette));
-        COM_REQUIRE_SUCCESS(palette->InitializeCustom(colors, stdext::lengthof(colors)));
+        COM_REQUIRE_SUCCESS(palette->InitializeCustom(colors, std::size(colors)));
 
         IWICBitmapPtr bitmap;
         COM_REQUIRE_SUCCESS(imaging_factory->CreateBitmap(descriptor.width,

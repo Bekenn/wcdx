@@ -25,6 +25,12 @@
             "inherits": "_vsbase",
             "displayName": "Visual Studio 2022",
             "generator": "Visual Studio 17"
+        },
+        {
+            "name": "vs2026",
+            "inherits": "_vsbase",
+            "displayName": "Visual Studio 2026",
+            "generator": "Visual Studio 18"
         }
     ],
     "buildPresets": [
@@ -62,6 +68,18 @@
             "name": "vs2022 Release",
             "displayName": "Release",
             "configurePreset": "vs2022",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2026 Debug",
+            "displayName": "Debug",
+            "configurePreset": "vs2026",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2026 Release",
+            "displayName": "Release",
+            "configurePreset": "vs2026",
             "configuration": "Release"
         }
     ]

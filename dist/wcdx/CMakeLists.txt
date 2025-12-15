@@ -18,6 +18,7 @@ set_target_properties(wcdx PROPERTIES WIN32_EXECUTABLE true)
 target_compile_definitions(wcdx PRIVATE WCDX_EXPORTS _UNICODE UNICODE _SCL_SECURE_NO_WARNINGS)
 target_include_directories(wcdx PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
 target_link_libraries(wcdx PRIVATE image stdext d3d9 RpcRT4)
+target_link_options(wcdx PRIVATE /SUBSYSTEM:WINDOWS) # CMake bug; see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/10891#note_1744927
 target_version_info(wcdx ${GENERATED_VERSION_RC} "wcdx support library")
 target_sources(wcdx PRIVATE ${SOURCES} ${MIDL_GENERATED_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES})

@@ -253,8 +253,7 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 #endif
 
         RECT activeRect = GetContentRect(clientRect);
-        if (_sizeChanged)
-        {
+
             if (activeRect.right - activeRect.left < clientRect.right - clientRect.left)
             {
                 D3DRECT bars[] =
@@ -275,7 +274,6 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
                 if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
                     return hr;
             }
-        }
 
         if (_dirty || _sizeChanged)
         {

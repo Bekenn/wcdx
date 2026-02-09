@@ -254,26 +254,26 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
 
         RECT activeRect = GetContentRect(clientRect);
 
-            if (activeRect.right - activeRect.left < clientRect.right - clientRect.left)
+        if (activeRect.right - activeRect.left < clientRect.right - clientRect.left)
+        {
+            D3DRECT bars[] =
             {
-                D3DRECT bars[] =
-                {
-                    { clientRect.left, clientRect.top, activeRect.left, activeRect.bottom },
-                    { activeRect.right, activeRect.top, clientRect.right, clientRect.bottom }
-                };
-                if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
-                    return hr;
-            }
-            else if (activeRect.bottom - activeRect.top < clientRect.bottom - clientRect.top)
+                { clientRect.left, clientRect.top, activeRect.left, activeRect.bottom },
+                { activeRect.right, activeRect.top, clientRect.right, clientRect.bottom }
+            };
+            if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
+                return hr;
+        }
+        else if (activeRect.bottom - activeRect.top < clientRect.bottom - clientRect.top)
+        {
+            D3DRECT bars[] =
             {
-                D3DRECT bars[] =
-                {
-                    { clientRect.left, clientRect.top, activeRect.right, activeRect.top },
-                    { activeRect.left, activeRect.bottom, clientRect.right, clientRect.bottom }
-                };
-                if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
-                    return hr;
-            }
+                { clientRect.left, clientRect.top, activeRect.right, activeRect.top },
+                { activeRect.left, activeRect.bottom, clientRect.right, clientRect.bottom }
+            };
+            if (FAILED(hr = _device->Clear(2, bars, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 0.0f, 0)))
+                return hr;
+        }
 
         if (_dirty || _sizeChanged)
         {

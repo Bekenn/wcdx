@@ -6,10 +6,10 @@
 #include <stdext/multi.h>
 #include <stdext/string_view.h>
 #include <stdext/unicode.h>
+#include <stdext/format.h>
 
 #include <algorithm>
 #include <iostream>
-#include <iomanip>
 #include <map>
 #include <optional>
 #include <string>
@@ -403,13 +403,13 @@ bool apply_dif(stdext::multi_ref<stdext::stream, stdext::seekable> file_data, ui
         auto value = stream.read<std::byte>();
         if (value != original_value)
         {
-            unsigned file_b = std::to_integer<unsigned>(value);
-            unsigned expect_b = std::to_integer<unsigned>(original_value);
-            unsigned repl_b = std::to_integer<unsigned>(replacement_value);
-            std::cerr << "apply_dif: mismatch at offset 0x" << std::hex << offset
-                      << ": file=0x" << std::setw(2) << std::setfill('0') << file_b
-                      << " expected=0x" << std::setw(2) << expect_b
-                      << " replace=0x" << std::setw(2) << repl_b << std::dec << "\n";
+            stdext::format(stdext::strerr(),
+            "apply_dif: mismatch at offset 0x${0:X}: file=0x${1:02X} expected=0x${2:02X} replace=0x${3:02X}\n",
+            offset,
+            std::to_integer<unsigned>(value),
+            std::to_integer<unsigned>(original_value),
+            std::to_integer<unsigned>(replacement_value));
+
             return false;
         }
         seekable.seek(stdext::seek_from::current, -1);

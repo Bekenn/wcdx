@@ -406,9 +406,9 @@ bool apply_dif(stdext::multi_ref<stdext::stream, stdext::seekable> file_data, ui
             stdext::format(stdext::strerr(),
             "apply_dif: mismatch at offset 0x${0:X}: file=0x${1:02X} expected=0x${2:02X} replace=0x${3:02X}\n",
             offset,
-            std::to_integer<unsigned>(value),
-            std::to_integer<unsigned>(original_value),
-            std::to_integer<unsigned>(replacement_value));
+            uint8_t(value),
+            uint8_t(original_value),
+            uint8_t(replacement_value));
 
             return false;
         }

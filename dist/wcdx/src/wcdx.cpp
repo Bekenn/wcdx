@@ -22,6 +22,7 @@
 #include <Shlobj.h>
 #include <strsafe.h>
 
+#include "frame_limiter.h"
 
 namespace
 {
@@ -288,6 +289,8 @@ HRESULT STDMETHODCALLTYPE Wcdx::Present()
             _sizeChanged = false;
         }
     }
+
+    Frame_Limiter();
 
     if (FAILED(hr = _device->Present(&clientRect, nullptr, nullptr, nullptr)))
         return hr;

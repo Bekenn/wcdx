@@ -67,6 +67,7 @@ public:
 
 private:
     static ATOM FrameWindowClass();
+    void DrainMessages(HWND hwnd, UINT message, WPARAM& wParam, LPARAM& lParam);
     static LRESULT CALLBACK FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
     void OnSize(DWORD resizeType, WORD clientWidth, WORD clientHeight);

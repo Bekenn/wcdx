@@ -600,6 +600,16 @@ ATOM Wcdx::FrameWindowClass()
     return windowClass;
 }
 
+    void Wcdx::DrainMessages(HWND hwnd, UINT message, WPARAM& wParam, LPARAM& lParam)
+    {
+        MSG msg;
+        while (::PeekMessage(&msg, hwnd, message, message, PM_REMOVE))
+        {
+            wParam = msg.wParam;
+            lParam = msg.lParam;
+        }
+    }
+
 LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     auto wcdx = reinterpret_cast<Wcdx*>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
@@ -644,6 +654,18 @@ LRESULT CALLBACK Wcdx::FrameWindowProc(HWND hwnd, UINT message, WPARAM wParam, L
             if (wcdx->OnNCLButtonDblClk(int(wParam), *reinterpret_cast<POINTS*>(&lParam)))
                 return 0;
             break;
+        
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_RBUTTONUP:
+            wcdx->DrainMessages(hwnd, message, wParam, lParam);
+        break;
 
         case WM_SYSCHAR:
             if (wcdx->OnSysChar(DWORD(wParam), LOWORD(lParam), HIWORD(lParam)))

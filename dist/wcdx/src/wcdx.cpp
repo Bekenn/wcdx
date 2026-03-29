@@ -683,6 +683,8 @@ void Wcdx::OnActivate(WORD state, BOOL minimized, HWND other)
 
     if (state != WA_INACTIVE)
         ConfineCursor();
+    else
+        ::ClipCursor(nullptr);
 }
 
 void Wcdx::OnWindowPosChanged(WINDOWPOS* windowPos)

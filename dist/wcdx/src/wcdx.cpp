@@ -88,7 +88,7 @@ Wcdx::Wcdx(LPCWSTR title, WNDPROC windowProc, bool _fullScreen)
 
     WcdxColor defColor = { 0, 0, 0, 0xFF };
     std::fill_n(_palette, std::size(_palette), defColor);
-
+    _fullScreen = exposed_fullScreen;
     SetFullScreen(IsDebuggerPresent() ? false : _fullScreen);
 
 #if DEBUG_SCREENSHOTS
@@ -769,13 +769,13 @@ void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
         break;
 
     default:
-        adjustWidth = height > (3 * width) / 4;
+        adjustWidth = height > (exposed_AspectRatioY * width) / exposed_AspectRatioX;
         break;
     }
 
     if (adjustWidth)
     {
-        width = (4 * height) / 3;
+        width = (exposed_AspectRatioX * height) / exposed_AspectRatioY;
         auto delta = width - (client.right - client.left);
         switch (windowEdge)
         {
@@ -798,7 +798,7 @@ void Wcdx::OnSizing(DWORD windowEdge, RECT* dragRect)
     }
     else
     {
-        height = (3 * width) / 4;
+        height = (exposed_AspectRatioY * width) / exposed_AspectRatioX;
         auto delta = height - (client.bottom - client.top);
         switch (windowEdge)
         {
@@ -929,6 +929,7 @@ void Wcdx::SetFullScreen(bool enabled)
             SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
         _fullScreen = true;
+        exposed_fullScreen = _fullScreen;
     }
     else
     {
@@ -942,6 +943,7 @@ void Wcdx::SetFullScreen(bool enabled)
             SWP_FRAMECHANGED | SWP_NOCOPYBITS | SWP_SHOWWINDOW);
 
         _fullScreen = false;
+        exposed_fullScreen = _fullScreen;
     }
 
     ConfineCursor();
@@ -950,8 +952,8 @@ void Wcdx::SetFullScreen(bool enabled)
 
 RECT Wcdx::GetContentRect(RECT clientRect)
 {
-    auto width = (4 * clientRect.bottom) / 3;
-    auto height = (3 * clientRect.right) / 4;
+    auto width = (exposed_AspectRatioX * clientRect.bottom) / exposed_AspectRatioY;
+    auto height = (exposed_AspectRatioY * clientRect.right) / exposed_AspectRatioX;
     if (width < clientRect.right)
     {
         clientRect.left = (clientRect.right - width) / 2;

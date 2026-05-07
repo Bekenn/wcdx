@@ -16,6 +16,10 @@
 
 #define DEBUG_SCREENSHOTS 0
 
+inline bool exposed_fullScreen = true;
+inline LONG exposed_AspectRatioX = 4;
+inline LONG exposed_AspectRatioY = 3;
+
 class Wcdx : public IWcdx
 {
 public:
